@@ -1,0 +1,305 @@
+export type FloodStatus = 'SAFE' | 'CAUTION' | 'WARNING' | 'CRITICAL';
+
+export type DamStatus = 'NORMAL' | 'STORM BUILDUP' | 'RISING' | 'WARNING' | 'CRITICAL' | 'RECEDING';
+
+export type RescuePriorityLevel = 'P0' | 'P1' | 'P2' | 'P3' | 'P4';
+
+export type DriftStatus = 'STATIONARY' | 'DRIFTING' | 'UNKNOWN';
+
+export type HealthValidity = 'VALID' | 'DEGRADED' | 'STALE' | 'UNKNOWN';
+
+export type CommStatus = 'ONLINE' | 'STALE' | 'OFFLINE' | 'UNREACHABLE';
+
+export type IncidentStatus = 'NEW' | 'ACKNOWLEDGED' | 'RESPONDER_EN_ROUTE' | 'ON_SCENE' | 'RESOLVED';
+
+export interface HealthThresholds {
+  spo2Critical: number; // e.g. < 90%
+  spo2Warning: number;  // e.g. < 94%
+  hrHighCritical: number; // e.g. > 135 bpm
+  hrHighWarning: number;  // e.g. > 115 bpm
+  hrLowCritical: number;  // e.g. < 45 bpm
+  hrLowWarning: number;   // e.g. < 55 bpm
+}
+
+export interface PriorityFactorBreakdown {
+  sosActive: boolean;
+  sosReason?: string;
+  healthSeverity: 'CRITICAL' | 'WARNING' | 'NORMAL' | 'STALE' | 'UNKNOWN';
+  healthReason: string;
+  floodExposure: 'CRITICAL' | 'WARNING' | 'CAUTION' | 'SAFE';
+  floodReason: string;
+  driftEvidence: 'CONFIRMED' | 'SUSPECTED' | 'NONE';
+  driftReason: string;
+  dataQuality: 'FRESH' | 'STALE_GPS' | 'STALE_HEALTH' | 'OFFLINE';
+  gpsAccuracyM?: number;
+  isImmediateDangerOverride: boolean;
+  overrideReason?: string;
+}
+
+export interface VitalReading {
+  timestamp: string;
+  value: number;
+}
+
+export interface RegisteredPerson {
+  personId: string;
+  wearableId: string;
+  name: string;
+  age?: number;
+  gender?: string;
+  contactNumber?: string;
+  medicalNotes?: string;
+  role: 'CITIZEN' | 'FIRST_RESPONDER';
+  
+  // GPS & Location Telemetry
+  lat: number;
+  lng: number;
+  locationTimestamp: string;
+  gpsAccuracyM: number; // e.g. 5m, 45m (poor accuracy flagged)
+  elevationM: number;
+  
+  // Vitals & Health Telemetry
+  heartRateBpm: number | null; // null = missing (shown as Unknown)
+  spo2Percent: number | null;  // null = missing (shown as Unknown)
+  healthTimestamp: string | null;
+  healthDataValidity: HealthValidity;
+  heartRateHistory: VitalReading[];
+  spo2History: VitalReading[];
+  
+  // Flood & Drift Telemetry
+  floodDepthCm: number;
+  floodRiskLevel: FloodStatus;
+  driftStatus: DriftStatus;
+  driftConfidence: number; // 0 - 100%
+  driftVelocityMs: number; // speed along current
+  
+  // Prioritisation
+  sosActive: boolean;
+  rescuePriority: RescuePriorityLevel;
+  priorityReason: string;
+  priorityFactors: PriorityFactorBreakdown;
+  priorityUpdatedAt: string;
+  priorityHistory: Array<{ timestamp: string; from: RescuePriorityLevel; to: RescuePriorityLevel; reason: string }>;
+  
+  // Connectivity & Incident
+  commStatus: CommStatus;
+  lastCommunicationTime: string;
+  batteryPercent: number;
+  incidentId?: string;
+  assignedResponderId?: string;
+  assignedResponderName?: string;
+  isSimulated?: boolean;
+}
+
+export interface IncidentAuditEntry {
+  timestamp: string;
+  operator: string;
+  action: string;
+  note?: string;
+}
+
+export interface IncidentRecord {
+  id: string;
+  personId: string;
+  personName: string;
+  wearableId: string;
+  priority: RescuePriorityLevel;
+  priorityReason: string;
+  isImmediateDanger: boolean;
+  status: IncidentStatus;
+  createdAt: string;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
+  assignedResponderId?: string;
+  assignedResponderName?: string;
+  assignedAt?: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  resolutionNotes?: string;
+  lat: number;
+  lng: number;
+  gpsAccuracyM: number;
+  floodDepthCm: number;
+  floodRiskLevel: FloodStatus;
+  heartRateBpm: number | null;
+  spo2Percent: number | null;
+  driftStatus: DriftStatus;
+  driftConfidence: number;
+  auditTrail: IncidentAuditEntry[];
+  isSynthetic?: boolean;
+}
+
+export interface ResearchScenario {
+  id: string;
+  name: string;
+  description: string;
+  peopleCount: number;
+  hazardLevel: 'MODERATE' | 'SEVERE' | 'CATASTROPHIC';
+  simulatedConditions: {
+    damLevelM: number;
+    precipitationMmH: number;
+    sosCount: number;
+    hypoxiaCount: number;
+    driftCount: number;
+    staleGpsCount: number;
+    offlineCount: number;
+  };
+}
+
+export interface ExperimentLog {
+  timestamp: string;
+  scenarioId: string;
+  scenarioName: string;
+  personId: string;
+  personName: string;
+  inputCondition: string;
+  previousPriority: RescuePriorityLevel;
+  newPriority: RescuePriorityLevel;
+  reason: string;
+  outcome: string;
+}
+
+export interface RoadSensor {
+  id: string;
+  roadSegmentId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  waterLevelCm: number;
+  rateOfRise: number; // cm/min
+  status: FloodStatus;
+  lastReported: string;
+  batteryPercent: number;
+  signalStrengthDbm: number;
+  elevationM: number;
+}
+
+export interface RoadNode {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  elevationM: number;
+}
+
+export interface RoadSegment {
+  id: string;
+  name: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  coordinates: [number, number][]; // [lat, lng] array
+  distanceM: number;
+  baseElevationM: number;
+  sensorId?: string;
+  status: FloodStatus;
+  waterLevelCm: number;
+  isBridge?: boolean;
+}
+
+export interface ReliefCentre {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  elevationM: number;
+  totalCapacity: number;
+  occupiedCapacity: number;
+  medicalFacility: boolean;
+  foodWaterStock: 'High' | 'Medium' | 'Critical';
+  status: 'ACTIVE' | 'FULL' | 'STANDBY';
+  contactPhone: string;
+  address: string;
+}
+
+export interface WearableDevice {
+  id: string;
+  holderName: string;
+  role: 'CITIZEN' | 'RESPONDER';
+  lat: number;
+  lng: number;
+  heartRate: number;
+  sosActive: boolean;
+  battery: number;
+  lastPing: string;
+}
+
+export interface LoraGateway {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  connectedNodes: number;
+  status: 'ONLINE' | 'DEGRADED' | 'OFFLINE';
+}
+
+export interface DamTelemetry {
+  damName: string;
+  reservoirLevelM: number;
+  maxCrestLevelM: number;
+  precipitationMmH: number;
+  rateOfRiseMMin: number;
+  spillwayReleaseCusecs: number;
+  inflowCusecs: number;
+  status: DamStatus;
+  lastUpdated: string;
+  history: Array<{
+    timestamp: string;
+    level: number;
+    precipitation: number;
+    release: number;
+  }>;
+}
+
+export interface RouteStep {
+  instruction: string;
+  roadName: string;
+  distanceM: number;
+  segmentId: string;
+  waterLevelCm: number;
+  riskStatus: FloodStatus;
+}
+
+export interface EvacuationRoute {
+  totalDistanceM: number;
+  estimatedMinutes: number;
+  averageRiskScore: number;
+  routeTitle: string; // "Estimated lower-risk route"
+  pathCoordinates: [number, number][];
+  steps: RouteStep[];
+  blockedSegmentsAvoided: string[];
+  destinationShelter: ReliefCentre;
+  hasCriticalSegments: boolean;
+  calculatedAt?: string;
+  dataFreshness?: string;
+  isRiskEngineOutput?: boolean;
+  warningNotice?: string;
+}
+
+export interface OfflineMapPackage {
+  id: string;
+  name: string;
+  center: [number, number];
+  radiusKm: number;
+  downloadedAt: string;
+  tileCount: number;
+  sizeBytes: number;
+  zoomLevels: number[];
+  nodes: RoadNode[];
+  segments: RoadSegment[];
+  reliefCentres: ReliefCentre[];
+  sensors: RoadSensor[];
+}
+
+export interface AiChatMessage {
+  id: string;
+  sender: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string;
+  safetyAlert?: {
+    type: 'warning' | 'danger' | 'info' | 'success';
+    headline: string;
+  };
+  recommendedShelterId?: string;
+  suggestedActions?: string[];
+}
+

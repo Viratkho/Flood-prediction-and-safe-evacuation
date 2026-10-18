@@ -1,0 +1,8 @@
+{
+  "name": "FloodGuard 2.1 — Offline Map & Flood Evacuation AI",
+  "description": "Real-time flood-aware evacuation routing, live GPS tracking, Dam hydrological simulation, downloadable offline map packages, and interactive AI emergency safety dispatcher.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

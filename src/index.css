@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Custom scrollbars for tactical dashboards */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090d16;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Leaflet dark/night tactical emergency theme */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #0b1120 !important;
+  font-family: inherit;
+}
+
+.dark-tiles .leaflet-tile {
+  filter: brightness(0.7) invert(1) contrast(3) hue-rotate(200deg) saturate(0.35);
+}
+
+.high-contrast-tiles .leaflet-tile {
+  filter: brightness(0.85) contrast(1.15) saturate(1.1);
+}
+
+/* Pulse animation for SOS and flood beacons */
+@keyframes emergency-pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(255, 119, 0, 0.7);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 14px rgba(255, 119, 0, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(255, 119, 0, 0);
+  }
+}
+
+.animate-emergency-pulse {
+  animation: emergency-pulse 2s infinite;
+}
+
+@keyframes flood-critical-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-critical-flood {
+  animation: flood-critical-pulse 1.2s infinite ease-in-out;
+}
