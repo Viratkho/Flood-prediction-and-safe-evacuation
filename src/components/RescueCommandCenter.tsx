@@ -23,9 +23,12 @@ import {
   HeartPulse,
   Layers,
   MapPin,
+  Phone,
   Radio,
   RefreshCw,
   Shield,
+  Smartphone,
+  Users,
   Waves,
   X,
   Zap,
@@ -46,6 +49,7 @@ interface RescueCommandCenterProps {
   selectedFocusLocation?: [number, number] | null;
   focusedPersonId?: string | null;
   onNavigateToPersonMonitoring?: () => void;
+  onOpenSmsModal?: (person: RegisteredPerson) => void;
 }
 
 export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
@@ -62,6 +66,7 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
   selectedFocusLocation,
   focusedPersonId,
   onNavigateToPersonMonitoring,
+  onOpenSmsModal,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -369,6 +374,8 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
       const isP1 = person.rescuePriority === 'P1';
       const isP2 = person.rescuePriority === 'P2';
       const isDrifting = person.driftStatus === 'DRIFTING';
+      const isUserReg = Boolean(person.isUserRegistered);
+      const isFocused = focusedPersonId === person.personId || (selectedFocusLocation && Math.abs(person.lat - selectedFocusLocation[0]) < 0.0003 && Math.abs(person.lng - selectedFocusLocation[1]) < 0.0003);
 
       const badgeColor = isSos || isP0
         ? '#ef4444' // Red
@@ -381,7 +388,21 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
         : '#10b981'; // Green
 
       const iconHtml = `
-        <div class="relative flex flex-col items-center cursor-pointer group">
+        <div class="relative flex flex-col items-center cursor-pointer group ${isFocused ? 'scale-110 z-[1000]' : ''}">
+          <!-- Person Name Tag directly on Map -->
+          <div class="mb-1 px-2 py-0.5 rounded-full bg-slate-950/95 border ${
+            isFocused
+              ? 'border-amber-400 ring-2 ring-amber-400/60 text-amber-200'
+              : isUserReg
+              ? 'border-emerald-500/80 text-emerald-200'
+              : 'border-slate-700 text-slate-100'
+          } font-bold text-[11px] shadow-2xl flex items-center gap-1.5 whitespace-nowrap backdrop-blur-md">
+            <span class="w-2 h-2 rounded-full ${
+              isSos || isP0 ? 'bg-red-500 animate-ping' : isUserReg ? 'bg-emerald-400' : 'bg-sky-400'
+            }"></span>
+            <span class="truncate max-w-[130px] font-sans">${person.name}</span>
+            ${isUserReg ? '<span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 py-0.2 rounded border border-emerald-500/40">REGISTERED</span>' : ''}
+          </div>
           <div class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-white shadow-lg border border-white flex items-center gap-1 ${
             isSos || isP0 ? 'animate-emergency-pulse' : ''
           }" style="background-color: ${badgeColor};">
@@ -396,8 +417,8 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
       const markerIcon = L.divIcon({
         className: 'custom-person-priority-icon',
         html: iconHtml,
-        iconSize: [48, 28],
-        iconAnchor: [24, 28],
+        iconSize: [160, 52],
+        iconAnchor: [80, 52],
       });
 
       const marker = L.marker([person.lat, person.lng], { icon: markerIcon });
@@ -413,7 +434,10 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
               ${person.rescuePriority}
             </span>
           </div>
-          <div class="font-bold text-sm text-slate-900">${person.name}</div>
+          <div class="font-bold text-base text-slate-900 flex items-center gap-1.5">
+            <span>${person.name}</span>
+            ${isUserReg ? '<span class="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">Registered Citizen</span>' : ''}
+          </div>
           <div class="text-[11px] text-slate-600 mb-2">${person.priorityReason}</div>
           <div class="space-y-0.5 border-t pt-1 font-mono text-[11px]">
             <div class="flex justify-between"><span>Heart Rate:</span> <strong>${person.heartRateBpm !== null ? `${person.heartRateBpm} BPM` : 'Unknown'}</strong></div>
@@ -427,7 +451,15 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
       `);
 
       personMarkersRef.current.set(person.personId, marker);
+      if (isFocused) {
+        setTimeout(() => {
+          marker.openPopup();
+          setSelectedPersonForInspection(person);
+        }, 200);
+      }
       wearableLayerRef.current?.addLayer(marker);
+
+
     });
 
     // Render Field Responders (Boats & Tactical Units)
@@ -453,6 +485,8 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
         </div>
       `);
       wearableLayerRef.current?.addLayer(marker);
+
+
     });
   }, [people, wearables, visibleLayers.wearables]);
 
@@ -938,6 +972,27 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
               </div>
             </div>
 
+            {/* Registered Mobile Phone & Action */}
+            <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <span className="text-[10px] text-slate-400 block font-mono">REGISTERED MOBILE NO</span>
+                <span className="font-mono text-xs font-bold text-emerald-400 flex items-center gap-1.5 truncate">
+                  <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  {selectedPersonForInspection.contactNumber || 'Not provided'}
+                </span>
+              </div>
+              {onOpenSmsModal && (
+                <button
+                  onClick={() => onOpenSmsModal(selectedPersonForInspection)}
+                  className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow shrink-0 transition"
+                  title={`Send alert to ${selectedPersonForInspection.contactNumber || 'mobile'}`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Send Alert</span>
+                </button>
+              )}
+            </div>
+
             <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-1 border-t border-slate-800/80">
               <span>Accuracy: ±{selectedPersonForInspection.gpsAccuracyM}m</span>
               <span>Updated: {selectedPersonForInspection.locationTimestamp}</span>
@@ -948,7 +1003,8 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
                 onClick={onNavigateToPersonMonitoring}
                 className="w-full py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs uppercase tracking-wider"
               >
-                Open in Person Monitoring Panel →
+                <Users className="w-3.5 h-3.5" />
+                View {selectedPersonForInspection.name} in Person Interface →
               </button>
             )}
           </div>

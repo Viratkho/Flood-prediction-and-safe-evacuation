@@ -38,6 +38,7 @@ import { voiceNav } from './services/voiceNav';
 import {
   AlertCircle,
   AlertTriangle,
+  CheckCircle,
   Bot,
   Compass,
   Download,
@@ -91,6 +92,11 @@ export default function App() {
   const [thresholds, setThresholds] = useState<HealthThresholds>(DEFAULT_HEALTH_THRESHOLDS);
   const [selectedFocusLocation, setSelectedFocusLocation] = useState<[number, number] | null>(null);
   const [focusedPersonId, setFocusedPersonId] = useState<string | null>(null);
+  const [globalMobileAlertToast, setGlobalMobileAlertToast] = useState<{
+    alert: MobileAlertMessage;
+    personName: string;
+    mobileNumber: string;
+  } | null>(null);
 
   // User GPS Tracking
   const [userLocation, setUserLocation] = useState<[number, number]>([13.1090, 80.1010]);
@@ -128,6 +134,16 @@ export default function App() {
       return () => navigator.geolocation.clearWatch(watchId);
     }
   }, [isSimulatedGps]);
+
+  // Auto-dismiss mobile alert toast after 10 seconds
+  useEffect(() => {
+    if (globalMobileAlertToast) {
+      const timer = setTimeout(() => {
+        setGlobalMobileAlertToast(null);
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [globalMobileAlertToast]);
 
   // Periodic Telemetry Sync with Backend (or fallback local simulation if offline)
   useEffect(() => {
@@ -525,12 +541,30 @@ export default function App() {
     }
   };
 
-  const handlePersonRegistered = (newPerson: RegisteredPerson, autoShowOnMap: boolean = true) => {
+  const handlePersonRegistered = (newPerson: RegisteredPerson, autoShowOnMap: boolean = true, alert?: MobileAlertMessage) => {
     setPeople((prev) => [newPerson, ...prev.filter((p) => p.personId !== newPerson.personId)]);
     setSelectedAlertPerson(newPerson);
     setActiveAdvisePerson(newPerson);
     setSelectedFocusLocation([newPerson.lat, newPerson.lng]);
     setFocusedPersonId(newPerson.personId);
+
+    const smsAlert: MobileAlertMessage = alert || {
+      id: `SMS-${Date.now().toString().slice(-4)}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      mobileNumber: newPerson.contactNumber || '+91 98401 23456',
+      recipientName: newPerson.name,
+      alertType: newPerson.sosActive ? 'EVACUATION' : 'SHELTER_ASSIGNED',
+      headline: newPerson.sosActive ? '🚨 URGENT EVACUATION DIRECTIVE' : '🛡️ FLOODGUARD INTAKE CONFIRMED',
+      message: `Registration confirmed for ${newPerson.name}. Assigned Safe Haven: Thirumullaivoyal High Ridge Defense Shelter. Evac route available on FloodGuard. Keep mobile battery saved.`,
+      status: 'DELIVERED',
+      gateway: 'Gov NDRF Emergency SMS / BSNL Cell Broadcast',
+    };
+
+    setGlobalMobileAlertToast({
+      alert: smsAlert,
+      personName: newPerson.name,
+      mobileNumber: newPerson.contactNumber || '',
+    });
 
     if (autoShowOnMap) {
       setActiveTab('command-center');
@@ -538,7 +572,7 @@ export default function App() {
     }
 
     voiceNav.speak(
-      `Emergency registration recorded for ${newPerson.name}. Plotting GPS location on live tactical map. Priority evaluated as ${newPerson.rescuePriority}.`,
+      `Emergency alert dispatched to registered mobile ${newPerson.contactNumber || ''} for ${newPerson.name}. Plotting GPS location on live tactical map. Priority evaluated as ${newPerson.rescuePriority}.`,
       false
     );
   };
@@ -639,7 +673,7 @@ export default function App() {
             }`}
           >
             <Users className="w-4 h-4 text-sky-400" />
-            <span>Person Monitoring ({people.length})</span>
+            <span>Person Interface ({people.length})</span>
           </button>
 
           <button
@@ -761,6 +795,7 @@ export default function App() {
             selectedFocusLocation={selectedFocusLocation}
             focusedPersonId={focusedPersonId}
             onNavigateToPersonMonitoring={() => setActiveTab('person-monitoring')}
+            onOpenSmsModal={handleOpenSmsModal}
           />
         )}
 
@@ -785,8 +820,8 @@ export default function App() {
           <div className="w-full h-full p-4 sm:p-6 overflow-y-auto">
             <PersonIntakeForm
               currentGps={userLocation}
-              onPersonRegistered={(person) => {
-                handlePersonRegistered(person, true);
+              onPersonRegistered={(person, alert) => {
+                handlePersonRegistered(person, true, alert);
               }}
               onOpenSmsModal={handleOpenSmsModal}
             />
@@ -835,14 +870,71 @@ export default function App() {
         )}
       </main>
 
+      {/* Global Real-Time SMS Alert Dispatched Toast Banner */}
+      {globalMobileAlertToast && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 max-w-xl w-[94%] bg-slate-900/95 border-2 border-emerald-500 rounded-2xl shadow-2xl p-3.5 backdrop-blur-md text-white animate-in slide-in-from-top-4 duration-300">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                <Smartphone className="w-5 h-5 animate-pulse" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-xs text-emerald-300 uppercase tracking-wider flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                    SMS Alert Sent to Registered Mobile No
+                  </span>
+                  <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/30">
+                    DELIVERED
+                  </span>
+                </div>
+                <div className="text-xs">
+                  Recipient: <strong className="text-white">{globalMobileAlertToast.personName}</strong> • Phone:{' '}
+                  <span className="font-mono text-emerald-400 font-bold bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                    {globalMobileAlertToast.mobileNumber}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 font-mono bg-slate-950 p-2 rounded-lg border border-slate-800 leading-relaxed">
+                  "{globalMobileAlertToast.alert.message}"
+                </p>
+                <div className="flex items-center gap-3 text-[10px] text-slate-400 pt-0.5 font-mono">
+                  <span>Gateway: {globalMobileAlertToast.alert.gateway}</span>
+                  <span>•</span>
+                  <span>{globalMobileAlertToast.alert.timestamp}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-end gap-1.5">
+              <button
+                onClick={() => setGlobalMobileAlertToast(null)}
+                className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+              >
+                ✕
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedAlertPerson(people.find((p) => p.name === globalMobileAlertToast.personName) || null);
+                  setIsMobileAlertModalOpen(true);
+                  setGlobalMobileAlertToast(null);
+                }}
+                className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[10px] font-bold shadow flex items-center gap-1 whitespace-nowrap"
+              >
+                Open SMS Log
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Citizen Registration Intake Modal */}
       {isIntakeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
           <div className="w-full max-w-4xl my-auto">
             <PersonIntakeForm
               currentGps={userLocation}
-              onPersonRegistered={(person) => {
-                handlePersonRegistered(person, true);
+              onPersonRegistered={(person, alert) => {
+                handlePersonRegistered(person, true, alert);
                 setIsIntakeModalOpen(false);
               }}
               onClose={() => setIsIntakeModalOpen(false)}

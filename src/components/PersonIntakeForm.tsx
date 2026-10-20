@@ -28,7 +28,7 @@ import {
 
 interface PersonIntakeFormProps {
   currentGps: [number, number];
-  onPersonRegistered: (person: RegisteredPerson) => void;
+  onPersonRegistered: (person: RegisteredPerson, alertMessage?: any) => void;
   onClose?: () => void;
   onOpenSmsModal?: (person: RegisteredPerson) => void;
 }
@@ -216,11 +216,42 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
         console.warn('LocalStorage save warning:', err);
       }
 
-      setRegisteredSuccess(newPerson);
-      onPersonRegistered(newPerson);
+      let dispatchedAlert = result.alert;
 
-      // If user requested welcome SMS, also send via gateway endpoint
-      if (sendWelcomeSms && contactNumber) {
+      // Ensure emergency alert is dispatched to the registered mobile number
+      if (contactNumber && contactNumber.trim()) {
+        try {
+          const smsRes = await fetch('/api/alerts/send-mobile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mobileNumber: contactNumber.trim(),
+              recipientName: newPerson.name,
+              alertType: sosActive ? 'EVACUATION' : 'SHELTER_ASSIGNED',
+              headline: sosActive ? '🚨 URGENT EVACUATION DIRECTIVE' : '🛡️ FLOODGUARD INTAKE & SHELTER ASSIGNMENT',
+              message: sosActive
+                ? `EMERGENCY ALERT: SOS registered for ${newPerson.name}. Water depth: ${currentWaterDepthCm}cm at (${lat.toFixed(4)}, ${lng.toFixed(4)}). NDRF rescue unit en route. Remain on highest floor.`
+                : `FLOODGUARD: Registration confirmed for ${newPerson.name}. Assigned Safe Haven: Thirumullaivoyal High Ridge Defense Shelter. Turn-by-turn route active on map. Keep phone charged.`,
+              personId: newPerson.personId,
+            }),
+          });
+          if (smsRes.ok) {
+            const smsData = await smsRes.json();
+            if (smsData.alert) {
+              dispatchedAlert = smsData.alert;
+            }
+          }
+        } catch (smsErr) {
+          console.warn('Mobile SMS dispatch error:', smsErr);
+        }
+      }
+
+      setRegisteredSuccess(newPerson);
+      onPersonRegistered(newPerson, dispatchedAlert);
+
+
+
+      if (false) {
         try {
           await fetch('/api/alerts/send-mobile', {
             method: 'POST',

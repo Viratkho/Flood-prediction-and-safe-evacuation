@@ -381,6 +381,10 @@ export const MobileAlertModal: React.FC<MobileAlertModalProps> = ({
                         </option>
                       ))}
                     </select>
+                    <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-[11px] font-mono mt-1 mb-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                      <span>Targeting Registered Mobile Number: <strong>{mobileNumber}</strong> ({recipientName})</span>
+                    </div>
                   )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

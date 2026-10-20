@@ -19,6 +19,7 @@ import {
   Info,
   MapPin,
   Navigation,
+  Phone,
   Plus,
   Radio,
   Search,
@@ -148,7 +149,7 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
               </div>
               <div>
                 <h2 className="font-bold text-sm text-white uppercase tracking-wider">
-                  Person & Victim Monitoring
+                  Person Interface & Victim Monitoring
                 </h2>
                 <p className="text-[11px] text-slate-400">
                   Real-time physiological vitals, location accuracy & rescue prioritization
@@ -425,10 +426,24 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-sm text-white">{person.name}</h3>
+                      <h3 className="font-bold text-sm text-white flex items-center gap-1.5">
+                        <span>{person.name}</span>
+                        {person.isUserRegistered && (
+                          <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] font-bold">
+                            REGISTERED
+                          </span>
+                        )}
+                      </h3>
                       {person.age && (
                         <span className="text-[11px] text-slate-400">({person.age}y, {person.gender})</span>
                       )}
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[11px] font-mono">
+                      <span className="text-emerald-400 flex items-center gap-1 font-semibold bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-900/60">
+                        <Phone className="w-3 h-3 text-emerald-400" />
+                        {person.contactNumber || 'No phone'}
+                      </span>
                     </div>
 
                     <p className="text-[11px] text-slate-400 leading-snug truncate max-w-md">
@@ -506,6 +521,23 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
                       <div className="text-slate-500">Comm: {person.lastCommunicationTime}</div>
                     </div>
 
+                    {onOpenSmsModal && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenSmsModal(person);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1 shadow transition"
+                        title={`Dispatch Emergency SMS Alert to ${person.contactNumber || 'registered mobile'}`}
+                      >
+                        <Smartphone className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Alert Mobile</span>
+                      </button>
+                    )}
+
+
+                    </div>
+
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -546,6 +578,26 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
             >
               <X className="w-4 h-4" />
             </button>
+          </div>
+
+          {/* Registered Mobile Contact & SMS Dispatch */}
+          <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-2">
+            <div>
+              <span className="text-[10px] text-slate-400 font-mono uppercase block">REGISTERED MOBILE NUMBER</span>
+              <span className="font-mono text-sm font-bold text-emerald-400 flex items-center gap-1.5 mt-0.5">
+                <Phone className="w-3.5 h-3.5" />
+                {selectedPerson.contactNumber || 'Not provided'}
+              </span>
+            </div>
+            {onOpenSmsModal && (
+              <button
+                onClick={() => onOpenSmsModal(selectedPerson)}
+                className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow transition"
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>Send Alert</span>
+              </button>
+            )}
           </div>
 
           {/* Rescue Priority Breakdown Card */}
