@@ -535,9 +535,6 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
                       </button>
                     )}
 
-
-                    </div>
-
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
