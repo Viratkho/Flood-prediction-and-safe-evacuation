@@ -27,6 +27,7 @@ import {
   RefreshCw,
   Shield,
   Waves,
+  X,
   Zap,
 } from 'lucide-react';
 
@@ -43,6 +44,7 @@ interface RescueCommandCenterProps {
   isOfflineMode: boolean;
   people?: RegisteredPerson[];
   selectedFocusLocation?: [number, number] | null;
+  focusedPersonId?: string | null;
   onNavigateToPersonMonitoring?: () => void;
 }
 
@@ -58,10 +60,13 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
   isOfflineMode,
   people = [],
   selectedFocusLocation,
+  focusedPersonId,
   onNavigateToPersonMonitoring,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
+  const personMarkersRef = useRef<Map<string, L.Marker>>(new Map());
+  const radarBeaconLayerRef = useRef<L.LayerGroup | null>(null);
 
   // Layer groups
   const sensorLayerRef = useRef<L.LayerGroup | null>(null);
@@ -84,20 +89,16 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
   const [selectedPersonForInspection, setSelectedPersonForInspection] = useState<RegisteredPerson | null>(null);
   const [activeTileTheme, setActiveTileTheme] = useState<'tactical-dark' | 'osm-standard'>('tactical-dark');
 
-  // Focus on map coordinate if triggered from another panel
-  useEffect(() => {
-    if (selectedFocusLocation && mapInstanceRef.current) {
-      mapInstanceRef.current.setView(selectedFocusLocation, 15, { animate: true });
-    }
-  }, [selectedFocusLocation]);
-
   // Initialize Map
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
+    const initialCenter = selectedFocusLocation || [13.1143, 80.1015];
+    const initialZoom = selectedFocusLocation ? 16 : 13;
+
     const map = L.map(mapContainerRef.current, {
-      center: [13.1143, 80.1015],
-      zoom: 13,
+      center: initialCenter,
+      zoom: initialZoom,
       zoomControl: false,
     });
 
@@ -117,6 +118,7 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
     shelterLayerRef.current = L.layerGroup().addTo(map);
     wearableLayerRef.current = L.layerGroup().addTo(map);
     gatewayLayerRef.current = L.layerGroup().addTo(map);
+    radarBeaconLayerRef.current = L.layerGroup().addTo(map);
 
     mapInstanceRef.current = map;
 
@@ -125,6 +127,81 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
       mapInstanceRef.current = null;
     };
   }, []);
+
+  // Enhanced focus and highlight on person coordinate when triggered
+  useEffect(() => {
+    if (!mapInstanceRef.current || !selectedFocusLocation) return;
+
+    // Ensure wearable/people layer is active
+    setVisibleLayers((prev) => (prev.wearables ? prev : { ...prev, wearables: true }));
+
+    // Smoothly pan & zoom to the exact citizen GPS location
+    mapInstanceRef.current.flyTo(selectedFocusLocation, 16, {
+      duration: 1.2,
+      easeLinearity: 0.25,
+    });
+
+    // Find the person corresponding to this GPS coordinate or ID
+    const matchedPerson = people.find((p) => {
+      if (focusedPersonId && p.personId === focusedPersonId) return true;
+      return (
+        Math.abs(p.lat - selectedFocusLocation[0]) < 0.0003 &&
+        Math.abs(p.lng - selectedFocusLocation[1]) < 0.0003
+      );
+    });
+
+    if (matchedPerson) {
+      setSelectedPersonForInspection(matchedPerson);
+
+      // Open marker popup after map flies to location
+      const timer = setTimeout(() => {
+        const marker = personMarkersRef.current.get(matchedPerson.personId);
+        if (marker) {
+          marker.openPopup();
+        }
+      }, 400);
+
+      // Render glowing radar beacon ripple on map
+      if (radarBeaconLayerRef.current) {
+        radarBeaconLayerRef.current.clearLayers();
+
+        const isSos = matchedPerson.sosActive || matchedPerson.rescuePriority === 'P0';
+        const ringColor = isSos ? '#ef4444' : '#ff7700';
+
+        const beaconIcon = L.divIcon({
+          className: 'gps-person-beacon-pulse pointer-events-none',
+          html: `
+            <div class="relative flex items-center justify-center pointer-events-none" style="width: 48px; height: 48px;">
+              <div class="absolute w-24 h-24 rounded-full border-2 animate-radar-ping" style="border-color: ${ringColor};"></div>
+              <div class="absolute w-12 h-12 rounded-full border-2 animate-ping opacity-75" style="border-color: ${ringColor};"></div>
+              <div class="w-4 h-4 rounded-full shadow-lg" style="background-color: ${ringColor};"></div>
+            </div>
+          `,
+          iconSize: [48, 48],
+          iconAnchor: [24, 24],
+        });
+
+        const beaconMarker = L.marker([matchedPerson.lat, matchedPerson.lng], {
+          icon: beaconIcon,
+          zIndexOffset: 1500,
+        });
+
+        radarBeaconLayerRef.current.addLayer(beaconMarker);
+
+        // Auto fade beacon ring after 15 seconds
+        const clearTimer = setTimeout(() => {
+          radarBeaconLayerRef.current?.clearLayers();
+        }, 15000);
+
+        return () => {
+          clearTimeout(timer);
+          clearTimeout(clearTimer);
+        };
+      }
+
+      return () => clearTimeout(timer);
+    }
+  }, [selectedFocusLocation, focusedPersonId, people]);
 
   // Update tile theme class
   useEffect(() => {
@@ -281,6 +358,7 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
   useEffect(() => {
     if (!wearableLayerRef.current || !mapInstanceRef.current) return;
     wearableLayerRef.current.clearLayers();
+    personMarkersRef.current.clear();
 
     if (!visibleLayers.wearables) return;
 
@@ -348,6 +426,7 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
         </div>
       `);
 
+      personMarkersRef.current.set(person.personId, marker);
       wearableLayerRef.current?.addLayer(marker);
     });
 
@@ -522,6 +601,60 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
       {/* Main Interactive Map Viewport */}
       <div className="relative flex-1 w-full h-full">
         <div ref={mapContainerRef} className="w-full h-full z-0" />
+
+        {/* Floating Focused Citizen HUD Banner */}
+        {selectedPersonForInspection && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-950/95 border border-[#ff7700] rounded-xl px-4 py-2.5 shadow-2xl backdrop-blur-md flex items-center gap-3 text-white max-w-xl animate-in fade-in slide-in-from-top-2">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-[#ff7700] to-amber-500 flex items-center justify-center text-white shrink-0 shadow-lg text-lg">
+              📍
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm truncate">{selectedPersonForInspection.name}</span>
+                <span className={`px-2 py-0.2 rounded text-[10px] font-mono font-bold text-white ${
+                  selectedPersonForInspection.rescuePriority === 'P0' ? 'bg-red-600' :
+                  selectedPersonForInspection.rescuePriority === 'P1' ? 'bg-[#ff7700]' :
+                  selectedPersonForInspection.rescuePriority === 'P2' ? 'bg-amber-600' : 'bg-sky-600'
+                }`}>
+                  {selectedPersonForInspection.rescuePriority}
+                </span>
+                <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950/90 px-1.5 py-0.2 rounded border border-emerald-500/30">
+                  SHOWN ON MAP
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-300 font-mono flex items-center gap-2 truncate">
+                <span>GPS: {selectedPersonForInspection.lat.toFixed(4)}, {selectedPersonForInspection.lng.toFixed(4)}</span>
+                <span>•</span>
+                <span>Depth: {selectedPersonForInspection.floodDepthCm}cm</span>
+                <span>•</span>
+                <span>{selectedPersonForInspection.contactNumber || 'No SMS'}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  if (mapInstanceRef.current) {
+                    mapInstanceRef.current.flyTo([selectedPersonForInspection.lat, selectedPersonForInspection.lng], 16, { duration: 0.8 });
+                    const marker = personMarkersRef.current.get(selectedPersonForInspection.personId);
+                    marker?.openPopup();
+                  }
+                }}
+                className="px-2.5 py-1 bg-[#ff7700] hover:bg-[#ff8811] text-white text-xs font-semibold rounded-lg transition"
+              >
+                Re-Center
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPersonForInspection(null)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+                title="Dismiss banner"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Floating Dam Hydrological Simulation Card */}
         <div className="absolute top-4 left-4 z-20 w-84 md:w-96 bg-slate-900/95 backdrop-blur-md rounded-xl border border-slate-800 shadow-2xl overflow-hidden text-slate-100">

@@ -90,6 +90,7 @@ export default function App() {
   const [experimentLogs, setExperimentLogs] = useState<ExperimentLog[]>([]);
   const [thresholds, setThresholds] = useState<HealthThresholds>(DEFAULT_HEALTH_THRESHOLDS);
   const [selectedFocusLocation, setSelectedFocusLocation] = useState<[number, number] | null>(null);
+  const [focusedPersonId, setFocusedPersonId] = useState<string | null>(null);
 
   // User GPS Tracking
   const [userLocation, setUserLocation] = useState<[number, number]>([13.1090, 80.1010]);
@@ -524,11 +525,22 @@ export default function App() {
     }
   };
 
-  const handlePersonRegistered = (newPerson: RegisteredPerson) => {
+  const handlePersonRegistered = (newPerson: RegisteredPerson, autoShowOnMap: boolean = true) => {
     setPeople((prev) => [newPerson, ...prev.filter((p) => p.personId !== newPerson.personId)]);
     setSelectedAlertPerson(newPerson);
     setActiveAdvisePerson(newPerson);
-    voiceNav.speak(`Emergency intake recorded for ${newPerson.name}. Priority evaluated as ${newPerson.rescuePriority}.`, false);
+    setSelectedFocusLocation([newPerson.lat, newPerson.lng]);
+    setFocusedPersonId(newPerson.personId);
+
+    if (autoShowOnMap) {
+      setActiveTab('command-center');
+      setIsIntakeModalOpen(false);
+    }
+
+    voiceNav.speak(
+      `Emergency registration recorded for ${newPerson.name}. Plotting GPS location on live tactical map. Priority evaluated as ${newPerson.rescuePriority}.`,
+      false
+    );
   };
 
   const handleOpenSmsModal = (person?: RegisteredPerson | null) => {
@@ -747,6 +759,7 @@ export default function App() {
             isOfflineMode={isOfflineMode}
             people={people}
             selectedFocusLocation={selectedFocusLocation}
+            focusedPersonId={focusedPersonId}
             onNavigateToPersonMonitoring={() => setActiveTab('person-monitoring')}
           />
         )}
@@ -762,6 +775,7 @@ export default function App() {
             onAdviseWithAi={handleAdviseWithAi}
             onSelectPersonOnMap={(p) => {
               setSelectedFocusLocation([p.lat, p.lng]);
+              setFocusedPersonId(p.personId);
               setActiveTab('command-center');
             }}
           />
@@ -772,8 +786,7 @@ export default function App() {
             <PersonIntakeForm
               currentGps={userLocation}
               onPersonRegistered={(person) => {
-                handlePersonRegistered(person);
-                setActiveTab('person-monitoring');
+                handlePersonRegistered(person, true);
               }}
               onOpenSmsModal={handleOpenSmsModal}
             />
@@ -829,7 +842,7 @@ export default function App() {
             <PersonIntakeForm
               currentGps={userLocation}
               onPersonRegistered={(person) => {
-                handlePersonRegistered(person);
+                handlePersonRegistered(person, true);
                 setIsIntakeModalOpen(false);
               }}
               onClose={() => setIsIntakeModalOpen(false)}
