@@ -6,6 +6,9 @@ import { AegisAiAssistant } from './components/AegisAiAssistant';
 import { PersonMonitoringPanel } from './components/PersonMonitoringPanel';
 import { IncidentWorkspace } from './components/IncidentWorkspace';
 import { ResearchSimulationMode } from './components/ResearchSimulationMode';
+import { PersonIntakeForm } from './components/PersonIntakeForm';
+import { MobileAlertModal } from './components/MobileAlertModal';
+import { FirewallSecurityModal } from './components/FirewallSecurityModal';
 import {
   BASIN_CENTER,
   INITIAL_ROAD_NODES,
@@ -28,6 +31,7 @@ import {
   ExperimentLog,
   HealthThresholds,
   IncidentStatus,
+  MobileAlertMessage,
 } from './types/floodguard';
 import { DEFAULT_HEALTH_THRESHOLDS, evaluateRescuePriority } from './services/priorityEngine';
 import { voiceNav } from './services/voiceNav';
@@ -43,21 +47,36 @@ import {
   HardDrive,
   HeartPulse,
   LifeBuoy,
+  Lock,
   MapPin,
   Navigation,
+  Plus,
   Radio,
   Shield,
+  ShieldCheck,
+  Smartphone,
   Users,
   Wifi,
   WifiOff,
 } from 'lucide-react';
 
-type TabView = 'command-center' | 'evacuation-app' | 'person-monitoring' | 'incident-workspace' | 'research-simulation';
+type TabView =
+  | 'command-center'
+  | 'evacuation-app'
+  | 'person-monitoring'
+  | 'person-intake'
+  | 'incident-workspace'
+  | 'research-simulation';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabView>('command-center');
   const [isOfflineManagerOpen, setIsOfflineManagerOpen] = useState(false);
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
+  const [isIntakeModalOpen, setIsIntakeModalOpen] = useState(false);
+  const [isMobileAlertModalOpen, setIsMobileAlertModalOpen] = useState(false);
+  const [isFirewallModalOpen, setIsFirewallModalOpen] = useState(false);
+  const [selectedAlertPerson, setSelectedAlertPerson] = useState<RegisteredPerson | null>(null);
+  const [activeAdvisePerson, setActiveAdvisePerson] = useState<RegisteredPerson | null>(null);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   // Basin and Sensor State
@@ -128,7 +147,20 @@ export default function App() {
         if (peopleRes.ok) {
           const data = await peopleRes.json();
           if (data.people && data.people.length > 0) {
-            setPeople(data.people);
+            try {
+              const stored = localStorage.getItem('floodguard_user_people');
+              const localList: RegisteredPerson[] = stored ? JSON.parse(stored) : [];
+              const backendMap = new Map(data.people.map((p: RegisteredPerson) => [p.personId, p]));
+              const merged = [...data.people];
+              for (const lp of localList) {
+                if (!backendMap.has(lp.personId)) {
+                  merged.unshift(lp);
+                }
+              }
+              setPeople(merged);
+            } catch {
+              setPeople(data.people);
+            }
           }
         }
 
@@ -492,6 +524,25 @@ export default function App() {
     }
   };
 
+  const handlePersonRegistered = (newPerson: RegisteredPerson) => {
+    setPeople((prev) => [newPerson, ...prev.filter((p) => p.personId !== newPerson.personId)]);
+    setSelectedAlertPerson(newPerson);
+    setActiveAdvisePerson(newPerson);
+    voiceNav.speak(`Emergency intake recorded for ${newPerson.name}. Priority evaluated as ${newPerson.rescuePriority}.`, false);
+  };
+
+  const handleOpenSmsModal = (person?: RegisteredPerson | null) => {
+    if (person) {
+      setSelectedAlertPerson(person);
+    }
+    setIsMobileAlertModalOpen(true);
+  };
+
+  const handleAdviseWithAi = (person: RegisteredPerson) => {
+    setActiveAdvisePerson(person);
+    setIsAiAssistantOpen(true);
+  };
+
   const blockedRoadNames = segments
     .filter((s) => s.status === 'CRITICAL' || s.waterLevelCm >= 50)
     .map((s) => s.name);
@@ -580,6 +631,18 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setActiveTab('person-intake')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'person-intake'
+                ? 'bg-gradient-to-r from-[#ff7700] to-amber-500 text-white shadow'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Plus className="w-4 h-4 text-[#ff7700]" />
+            <span>Register Intake</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('incident-workspace')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'incident-workspace'
@@ -616,8 +679,32 @@ export default function App() {
           </button>
         </div>
 
-        {/* Global Action Modals: Offline Pack & AI Assistant */}
+        {/* Global Action Modals: Security Badge, Mobile Alert, Offline Pack & AI Assistant */}
         <div className="flex items-center gap-2">
+          {/* WAF Firewall Defense Status Trigger */}
+          <button
+            onClick={() => setIsFirewallModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-950/70 border border-emerald-500/40 text-[11px] font-mono text-emerald-300 hover:bg-emerald-900/60 hover:border-emerald-400 transition cursor-pointer shadow-sm group active:scale-95"
+            title="Layer 7 Web Application Firewall (WAF) Active — Click to open Firewall Center & Live Threat Inspection"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+            <span className="font-bold hidden sm:inline">FIREWALL:</span>
+            <span className="text-emerald-200">ACTIVE & DEFENDING</span>
+            <span className="hidden xl:inline text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
+              ZERO-FINGERPRINT
+            </span>
+          </button>
+
+          {/* Emergency Mobile SMS Alert Gateway Trigger */}
+          <button
+            onClick={() => handleOpenSmsModal(people[0])}
+            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow transition active:scale-95"
+            title="Send Emergency SMS Alert to Mobile"
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            <span>Mobile Alert</span>
+          </button>
+
           {/* Offline Mode Indicator Badge */}
           {isOfflineMode && (
             <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-mono font-bold animate-pulse">
@@ -637,10 +724,10 @@ export default function App() {
 
           <button
             onClick={() => setIsAiAssistantOpen(true)}
-            className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-sky-500/20 transition active:scale-95"
+            className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-[#ff7700] to-amber-500 hover:from-[#ff8811] hover:to-amber-400 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-[#ff7700]/20 transition active:scale-95"
             title="Open Interactive Aegis AI Assistant"
           >
-            <Bot className="w-4 h-4 text-slate-950" />
+            <Bot className="w-4 h-4 text-white" />
             <span>Aegis AI</span>
           </button>
         </div>
@@ -670,11 +757,27 @@ export default function App() {
             reliefCentres={reliefCentres}
             thresholds={thresholds}
             onUpdateThresholds={(t) => setThresholds(t)}
+            onOpenSmsModal={handleOpenSmsModal}
+            onOpenIntakeModal={() => setIsIntakeModalOpen(true)}
+            onAdviseWithAi={handleAdviseWithAi}
             onSelectPersonOnMap={(p) => {
               setSelectedFocusLocation([p.lat, p.lng]);
               setActiveTab('command-center');
             }}
           />
+        )}
+
+        {activeTab === 'person-intake' && (
+          <div className="w-full h-full p-4 sm:p-6 overflow-y-auto">
+            <PersonIntakeForm
+              currentGps={userLocation}
+              onPersonRegistered={(person) => {
+                handlePersonRegistered(person);
+                setActiveTab('person-monitoring');
+              }}
+              onOpenSmsModal={handleOpenSmsModal}
+            />
+          </div>
         )}
 
         {activeTab === 'incident-workspace' && (
@@ -719,6 +822,32 @@ export default function App() {
         )}
       </main>
 
+      {/* Citizen Registration Intake Modal */}
+      {isIntakeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          <div className="w-full max-w-4xl my-auto">
+            <PersonIntakeForm
+              currentGps={userLocation}
+              onPersonRegistered={(person) => {
+                handlePersonRegistered(person);
+                setIsIntakeModalOpen(false);
+              }}
+              onClose={() => setIsIntakeModalOpen(false)}
+              onOpenSmsModal={handleOpenSmsModal}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Emergency Mobile SMS Alert Gateway Modal */}
+      {isMobileAlertModalOpen && (
+        <MobileAlertModal
+          people={people}
+          initialPerson={selectedAlertPerson}
+          onClose={() => setIsMobileAlertModalOpen(false)}
+        />
+      )}
+
       {/* Offline Map Manager Modal */}
       {isOfflineManagerOpen && (
         <OfflineMapManager
@@ -740,13 +869,24 @@ export default function App() {
           userLocation={userLocation}
           blockedRoads={blockedRoadNames}
           reliefCentres={reliefCentres}
+          people={people}
+          activePerson={activeAdvisePerson}
           onSelectShelter={(shelterId) => {
             setActiveTab('evacuation-app');
             setIsAiAssistantOpen(false);
           }}
+          onOpenSmsModal={(person) => {
+            handleOpenSmsModal(person);
+          }}
           onClose={() => setIsAiAssistantOpen(false)}
         />
       )}
+
+      {/* Cyber Defense & WAF Firewall Center Modal */}
+      <FirewallSecurityModal
+        isOpen={isFirewallModalOpen}
+        onClose={() => setIsFirewallModalOpen(false)}
+      />
     </div>
   );
 }

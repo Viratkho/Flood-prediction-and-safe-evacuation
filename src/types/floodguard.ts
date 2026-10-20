@@ -48,6 +48,14 @@ export interface RegisteredPerson {
   age?: number;
   gender?: string;
   contactNumber?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  addressLandmark?: string;
+  dependentsCount?: number;
+  dependentsDetails?: string;
+  medicalConditions?: string[];
+  assistanceType?: 'RESCUE_BOAT' | 'MEDICAL_EVAC' | 'SHELTER_ROUTING' | 'SUPPLIES' | 'GENERAL_ADVICE';
+  isUserRegistered?: boolean;
   medicalNotes?: string;
   role: 'CITIZEN' | 'FIRST_RESPONDER';
   
@@ -301,5 +309,71 @@ export interface AiChatMessage {
   };
   recommendedShelterId?: string;
   suggestedActions?: string[];
+  smsDelivered?: boolean;
 }
+
+export interface CitizenRegistrationInput {
+  name: string;
+  mobileNumber: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  dependentsCount: number;
+  dependentsDetails?: string;
+  medicalConditions: string[];
+  lat: number;
+  lng: number;
+  addressLandmark: string;
+  currentWaterDepthCm: number;
+  assistanceType: 'RESCUE_BOAT' | 'MEDICAL_EVAC' | 'SHELTER_ROUTING' | 'SUPPLIES' | 'GENERAL_ADVICE';
+  additionalNotes?: string;
+}
+
+export interface MobileAlertMessage {
+  id: string;
+  timestamp: string;
+  mobileNumber: string;
+  recipientName: string;
+  alertType: 'EVACUATION' | 'SURGE_WARNING' | 'RESCUE_DISPATCH' | 'SOS_ACK' | 'SHELTER_ASSIGNED' | 'DIRECT_ALERT';
+  headline: string;
+  message: string;
+  status: 'DELIVERED' | 'SENT' | 'FAILED';
+  gateway: string;
+}
+
+export interface FirewallThreatLog {
+  id: string;
+  timestamp: string;
+  threatType: 'SQL_INJECTION' | 'XSS_ATTACK' | 'PATH_TRAVERSAL' | 'RATE_LIMIT_EXCEEDED' | 'MALICIOUS_BOT' | 'SUSPICIOUS_PAYLOAD';
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+  clientIp: string;
+  endpoint: string;
+  method: string;
+  details: string;
+  action: 'BLOCKED_403' | 'RATE_LIMITED_429' | 'QUARANTINED';
+}
+
+export interface FirewallSecurityStatus {
+  active: boolean;
+  engineVersion: string;
+  serverFingerprintingSuppressed: boolean;
+  totalRequestsInspected: number;
+  totalThreatsBlocked: number;
+  quarantinedIpsCount: number;
+  activeProtections: {
+    name: string;
+    description: string;
+    status: 'ACTIVE' | 'ENFORCING';
+  }[];
+  threatStats: {
+    sqlInjection: number;
+    xss: number;
+    pathTraversal: number;
+    rateLimitExceeded: number;
+    maliciousBots: number;
+    suspiciousPayloads: number;
+  };
+  recentLogs: FirewallThreatLog[];
+}
+
+
 

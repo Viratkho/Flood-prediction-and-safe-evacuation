@@ -19,16 +19,19 @@ import {
   Info,
   MapPin,
   Navigation,
+  Plus,
   Radio,
   Search,
   Shield,
   Sliders,
+  Smartphone,
   User,
   Users,
   Waves,
   Wifi,
   WifiOff,
   X,
+  Bot,
 } from 'lucide-react';
 
 interface PersonMonitoringPanelProps {
@@ -36,6 +39,9 @@ interface PersonMonitoringPanelProps {
   reliefCentres: ReliefCentre[];
   onSelectPersonOnMap?: (person: RegisteredPerson) => void;
   onAssignResponder?: (personId: string, responderId: string) => void;
+  onOpenSmsModal?: (person: RegisteredPerson) => void;
+  onOpenIntakeModal?: () => void;
+  onAdviseWithAi?: (person: RegisteredPerson) => void;
   thresholds?: HealthThresholds;
   onUpdateThresholds?: (t: HealthThresholds) => void;
 }
@@ -45,6 +51,9 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
   reliefCentres,
   onSelectPersonOnMap,
   onAssignResponder,
+  onOpenSmsModal,
+  onOpenIntakeModal,
+  onAdviseWithAi,
   thresholds = DEFAULT_HEALTH_THRESHOLDS,
   onUpdateThresholds,
 }) => {
@@ -147,14 +156,38 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
               </div>
             </div>
 
-            <button
-              onClick={() => setIsConfiguringThresholds((c) => !c)}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 flex items-center gap-1.5 transition"
-              title="Configure Clinical Thresholds"
-            >
-              <Sliders className="w-3.5 h-3.5 text-sky-400" />
-              <span className="hidden sm:inline">Clinical Thresholds</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {onOpenIntakeModal && (
+                <button
+                  onClick={onOpenIntakeModal}
+                  className="px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-[#ff7700] to-amber-500 hover:from-[#ff8811] hover:to-amber-400 text-xs font-bold text-white flex items-center gap-1.5 shadow transition"
+                  title="Open Citizen Intake Form"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Register Intake</span>
+                </button>
+              )}
+
+              {onOpenSmsModal && (
+                <button
+                  onClick={() => onOpenSmsModal(people[0])}
+                  className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white flex items-center gap-1.5 shadow transition"
+                  title="Dispatch Emergency Mobile SMS Alert"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Emergency SMS</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => setIsConfiguringThresholds((c) => !c)}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 flex items-center gap-1.5 transition"
+                title="Configure Clinical Thresholds"
+              >
+                <Sliders className="w-3.5 h-3.5 text-sky-400" />
+                <span className="hidden sm:inline">Clinical Thresholds</span>
+              </button>
+            </div>
           </div>
 
           {/* Search Box */}
@@ -709,11 +742,31 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
           <div className="space-y-2 pt-2">
             <button
               onClick={() => onSelectPersonOnMap && onSelectPersonOnMap(selectedPerson)}
-              className="w-full py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow"
+              className="w-full py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow transition"
             >
               <Navigation className="w-4 h-4" />
               Focus Victim on Tactical Map
             </button>
+
+            {onOpenSmsModal && (
+              <button
+                onClick={() => onOpenSmsModal(selectedPerson)}
+                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow transition"
+              >
+                <Smartphone className="w-4 h-4" />
+                Dispatch Emergency SMS Alert to {selectedPerson.contactNumber || 'Mobile'}
+              </button>
+            )}
+
+            {onAdviseWithAi && (
+              <button
+                onClick={() => onAdviseWithAi(selectedPerson)}
+                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#ff7700] to-amber-500 hover:from-[#ff8811] hover:to-amber-400 text-white font-bold text-xs flex items-center justify-center gap-2 shadow transition"
+              >
+                <Bot className="w-4 h-4" />
+                Get Personalized Aegis AI Guidance
+              </button>
+            )}
           </div>
         </div>
       )}

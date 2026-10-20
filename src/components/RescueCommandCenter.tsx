@@ -341,6 +341,7 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
             <div class="flex justify-between"><span>Heart Rate:</span> <strong>${person.heartRateBpm !== null ? `${person.heartRateBpm} BPM` : 'Unknown'}</strong></div>
             <div class="flex justify-between"><span>Blood Oxygen:</span> <strong class="${person.spo2Percent !== null && person.spo2Percent < 90 ? 'text-red-600' : ''}">${person.spo2Percent !== null ? `${person.spo2Percent}%` : 'Unknown'}</strong></div>
             <div class="flex justify-between"><span>Flood Depth:</span> <strong class="text-blue-700">${person.floodDepthCm} cm</strong></div>
+            <div class="flex justify-between"><span>Mobile SMS:</span> <strong class="text-emerald-700">${person.contactNumber || 'Available'}</strong></div>
             <div class="flex justify-between"><span>Drift Status:</span> <strong class="${isDrifting ? 'text-cyan-700 font-bold' : ''}">${person.driftStatus}</strong></div>
             <div class="flex justify-between"><span>GPS Accuracy:</span> <span>±${person.gpsAccuracyM}m</span></div>
           </div>
