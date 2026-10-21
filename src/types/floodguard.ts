@@ -338,6 +338,8 @@ export interface MobileAlertMessage {
   message: string;
   status: 'DELIVERED' | 'SENT' | 'FAILED';
   gateway: string;
+  freeApiUsed?: string;
+  nativeSmsUrl?: string;
 }
 
 export interface FirewallThreatLog {

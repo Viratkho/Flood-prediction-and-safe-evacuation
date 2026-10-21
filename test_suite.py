@@ -42,6 +42,8 @@ def test(name, status, details=""):
     results.append({"name": name, "status": status, "details": details})
     print(f"[{status}] {name} - {details}")
 
+# Pre-clear any prior test quarantine or rate limiter holds before beginning suite
+request("POST", "/api/security/firewall-clear-quarantine")
 print("=== STARTING COMPREHENSIVE FLOODGUARD AUDIT TEST SUITE ===")
 
 # Test 1: Frontend root load
@@ -162,9 +164,10 @@ alert_payload = {
 }
 c_sms, r_sms = request("POST", "/api/alerts/send-mobile", alert_payload)
 if c_sms == 200 and isinstance(r_sms, dict) and r_sms.get("success") is True:
-    test("TC-BE-013: Mobile Alert Gateway Dispatch", "PASS", f"Delivered: {r_sms.get('deliveryStatus')}, Gateway: {r_sms.get('gatewayUsed')}")
+    free_api = r_sms.get("freeApiUsed", "None")
+    test("TC-BE-013: Mobile Alert Free Gateway Dispatch", "PASS", f"Delivered: {r_sms.get('deliveryStatus')}, Gateway: {r_sms.get('gatewayUsed')}, Free API: {free_api}")
 else:
-    test("TC-BE-013: Mobile Alert Gateway Dispatch", "FAIL", f"HTTP {c_sms}: {r_sms}")
+    test("TC-BE-013: Mobile Alert Free Gateway Dispatch", "FAIL", f"HTTP {c_sms}: {r_sms}")
 
 # Test 15: Mobile Alert Dispatch - Missing Phone
 c_no_phone, r_no_phone = request("POST", "/api/alerts/send-mobile", {"message": "Test"})

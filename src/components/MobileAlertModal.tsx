@@ -238,9 +238,9 @@ export const MobileAlertModal: React.FC<MobileAlertModalProps> = ({
             <div>
               <h2 className="text-lg font-bold flex items-center gap-2">
                 Emergency Mobile SMS Alert Gateway
-                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1 font-mono">
-                  <Wifi className="w-3 h-3 text-emerald-400" />
-                  Cell Broadcast & SMS Active
+                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 font-mono">
+                  <Shield className="w-3 h-3 text-emerald-400" />
+                  Free Secure SMS & Push Gateway Active
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
@@ -323,6 +323,11 @@ export const MobileAlertModal: React.FC<MobileAlertModalProps> = ({
                           <span className="font-mono text-slate-400">({alert.mobileNumber})</span>
                         </div>
                         <div className="flex items-center gap-2">
+                          {alert.freeApiUsed && (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 text-[10px] font-mono">
+                              Free API
+                            </span>
+                          )}
                           <span className="text-slate-500 font-mono">{alert.timestamp}</span>
                           <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1">
                             <CheckCircle className="w-3 h-3" />
@@ -368,6 +373,12 @@ export const MobileAlertModal: React.FC<MobileAlertModalProps> = ({
                         {lastDelivered.gateway}
                       </span>
                     </div>
+                    {lastDelivered.freeApiUsed && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-emerald-300 font-mono">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Secure Free Channel: {lastDelivered.freeApiUsed}</span>
+                      </div>
+                    )}
                     <p className="text-[11px] text-slate-300">
                       Dispatched via gateway. You can also tap below to open your phone or computer's native SMS application directly with this exact emergency message ready to send:
                     </p>
