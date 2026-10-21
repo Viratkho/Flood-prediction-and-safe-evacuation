@@ -250,36 +250,26 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
     setErrorMessage('');
     setIsSubmitting(true);
 
-    const safeLat = (!isNaN(Number(lat)) && isFinite(Number(lat)) && Number(lat) !== 0) ? Number(lat) : 13.1120;
-    const safeLng = (!isNaN(Number(lng)) && isFinite(Number(lng)) && Number(lng) !== 0) ? Number(lng) : 80.1030;
-    const safeHr = (!isNaN(Number(initialHeartRate)) && Number(initialHeartRate) > 0) ? Number(initialHeartRate) : 78;
-    const safeSpo2 = (!isNaN(Number(initialSpo2)) && Number(initialSpo2) > 0) ? Number(initialSpo2) : 98;
-    const safeDepth = (!isNaN(Number(currentWaterDepthCm)) && Number(currentWaterDepthCm) >= 0) ? Number(currentWaterDepthCm) : 15;
-    const safeAge = age ? Number(age) : undefined;
-    const isSos = Boolean(sosActive);
-
     const payload = {
       name: name.trim(),
-      age: safeAge,
+      age: age ? Number(age) : undefined,
       gender,
       contactNumber: contactNumber.trim(),
       emergencyContactName: emergencyContactName.trim(),
       emergencyContactPhone: emergencyContactPhone.trim(),
       addressLandmark: addressLandmark.trim() || 'Avadi Hydrological Basin',
-      lat: safeLat,
-      lng: safeLng,
-      currentWaterDepthCm: safeDepth,
+      lat,
+      lng,
+      currentWaterDepthCm,
       assistanceType,
-      dependentsCount: Number(dependentsCount) || 0,
-      dependentsDetails: dependentsDetails.trim(),
+      dependentsCount,
+      dependentsDetails,
       medicalConditions: selectedConditions,
       medicalNotes: medicalNotes.trim(),
-      initialHeartRate: safeHr,
-      initialSpo2: safeSpo2,
-      sosActive: isSos,
+      initialHeartRate,
+      initialSpo2,
+      sosActive,
     };
-
-    let newPerson: RegisteredPerson;
 
     try {
       // 1. Submit to server to store persistently
@@ -289,124 +279,53 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
         body: JSON.stringify(payload),
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        newPerson = result.person;
-      } else {
-        let errorDetail = `HTTP ${response.status}`;
-        try {
-          const errData = await response.json();
-          if (errData?.error) errorDetail = errData.error;
-        } catch (_) {}
-        console.warn(`Server intake warning (${errorDetail}), continuing with infallible local store fallback`);
-        throw new Error(errorDetail);
+      if (!response.ok) {
+        throw new Error('Server returned error while saving person details');
       }
-    } catch (networkOrServerErr: any) {
-      console.warn('Using client persistent fallback intake for citizen:', networkOrServerErr);
-      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const fallbackId = `P-${Date.now().toString().slice(-4)}`;
-      const fallbackWearable = `WB-${Math.floor(200 + Math.random() * 800)}`;
 
-      newPerson = {
-        personId: fallbackId,
-        wearableId: fallbackWearable,
-        name: name.trim(),
-        age: safeAge,
-        gender: gender || 'Unspecified',
-        contactNumber: contactNumber.trim() || '+91 98400 00000',
-        emergencyContactName: emergencyContactName.trim(),
-        emergencyContactPhone: emergencyContactPhone.trim(),
-        addressLandmark: addressLandmark.trim() || 'Avadi Hydrological Basin',
-        dependentsCount: Number(dependentsCount) || 0,
-        dependentsDetails: dependentsDetails.trim(),
-        medicalConditions: selectedConditions,
-        assistanceType,
-        isUserRegistered: true,
-        medicalNotes: medicalNotes.trim() || (selectedConditions.length ? `Vulnerabilities: ${selectedConditions.join(', ')}` : 'None reported'),
-        role: 'CITIZEN',
-        lat: safeLat,
-        lng: safeLng,
-        locationTimestamp: nowStr,
-        gpsAccuracyM: 8,
-        elevationM: 16.2,
-        heartRateBpm: safeHr,
-        spo2Percent: safeSpo2,
-        healthTimestamp: nowStr,
-        healthDataValidity: 'VALID',
-        heartRateHistory: [
-          { timestamp: '10m ago', value: safeHr - 2 },
-          { timestamp: '5m ago', value: safeHr },
-          { timestamp: 'Now', value: safeHr },
-        ],
-        spo2History: [
-          { timestamp: '10m ago', value: safeSpo2 },
-          { timestamp: '5m ago', value: safeSpo2 },
-          { timestamp: 'Now', value: safeSpo2 },
-        ],
-        floodDepthCm: safeDepth,
-        floodRiskLevel: safeDepth > 45 ? 'CRITICAL' : safeDepth > 20 ? 'WARNING' : safeDepth > 10 ? 'CAUTION' : 'SAFE',
-        driftStatus: safeDepth > 50 ? 'DRIFTING' : 'STATIONARY',
-        driftConfidence: safeDepth > 50 ? 65 : 0,
-        driftVelocityMs: 0,
-        sosActive: isSos,
-        rescuePriority: isSos ? 'P0' : safeDepth > 45 ? 'P1' : 'P3',
-        priorityReason: isSos ? 'Active Emergency SOS Beacon' : 'Local Intake Assessment',
-        priorityFactors: {
-          sosActive: isSos,
-          healthSeverity: 'NORMAL',
-          healthReason: `HR ${safeHr} BPM, SpO₂ ${safeSpo2}%`,
-          floodExposure: safeDepth > 45 ? 'CRITICAL' : 'SAFE',
-          floodReason: `Depth ${safeDepth}cm`,
-          driftEvidence: 'NONE',
-          driftReason: 'Stationary position confirmed',
-          dataQuality: 'FRESH',
-          gpsAccuracyM: 8,
-          isImmediateDangerOverride: isSos,
-        },
-        priorityUpdatedAt: nowStr,
-        priorityHistory: [],
-        commStatus: 'ONLINE',
-        lastCommunicationTime: nowStr,
-        batteryPercent: 92,
-      };
-    }
+      const result = await response.json();
+      const newPerson: RegisteredPerson = result.person;
 
-    // 2. Persist permanently in localStorage so citizen data survives refreshes & offline
-    try {
-      const stored = localStorage.getItem('floodguard_user_people');
-      const list: RegisteredPerson[] = stored ? JSON.parse(stored) : [];
-      const updated = [newPerson, ...list.filter((p) => p.personId !== newPerson.personId)];
-      localStorage.setItem('floodguard_user_people', JSON.stringify(updated));
-    } catch (err) {
-      console.warn('LocalStorage save warning:', err);
-    }
-
-    setRegisteredSuccess(newPerson);
-    onPersonRegistered(newPerson, autoShowOnMap);
-
-    // If user requested confirmation SMS, dispatch via gateway endpoint
-    if (sendWelcomeSms && contactNumber) {
+      // 2. Also persist locally in localStorage so data survives reloads & offline
       try {
-        await fetch('/api/alerts/send-mobile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mobileNumber: contactNumber.trim(),
-            recipientName: newPerson.name,
-            alertType: isSos ? 'EVACUATION' : 'SHELTER_ASSIGNED',
-            headline: isSos ? '🚨 SOS BEACON REGISTERED' : '🛡️ FLOODGUARD INTAKE CONFIRMED',
-            message: isSos
-              ? `EMERGENCY ALERT: SOS logged for ${newPerson.name}. NDRF Boat Unit alerted for GPS (${safeLat.toFixed(4)}, ${safeLng.toFixed(4)}). Stay elevated on highest floor.`
-              : `FLOODGUARD: Intake confirmed for ${newPerson.name}. Primary Safe Haven: Thirumullaivoyal High Ridge Defense Shelter. Check Evacuation Map for turn-by-turn routing.`,
-            personId: newPerson.personId,
-          }),
-        });
-      } catch (smsErr) {
-        console.warn('Mobile SMS dispatch error:', smsErr);
+        const stored = localStorage.getItem('floodguard_user_people');
+        const list: RegisteredPerson[] = stored ? JSON.parse(stored) : [];
+        const updated = [newPerson, ...list.filter((p) => p.personId !== newPerson.personId)];
+        localStorage.setItem('floodguard_user_people', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('LocalStorage save warning:', err);
       }
-    }
 
-    setIsSubmitting(false);
+      setRegisteredSuccess(newPerson);
+      onPersonRegistered(newPerson, autoShowOnMap);
+
+      // If user requested welcome SMS, also send via gateway endpoint
+      if (sendWelcomeSms && contactNumber) {
+        try {
+          await fetch('/api/alerts/send-mobile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mobileNumber: contactNumber,
+              recipientName: newPerson.name,
+              alertType: sosActive ? 'EVACUATION' : 'SHELTER_ASSIGNED',
+              headline: sosActive ? '🚨 SOS BEACON REGISTERED' : '🛡️ FLOODGUARD INTAKE CONFIRMED',
+              message: sosActive
+                ? `EMERGENCY ALERT: SOS logged for ${newPerson.name}. NDRF Boat Unit alerted for GPS (${lat.toFixed(4)}, ${lng.toFixed(4)}). Stay elevated on highest floor.`
+                : `FLOODGUARD: Intake confirmed for ${newPerson.name}. Primary Safe Haven: Thirumullaivoyal High Ridge Defense Shelter. Check Evacuation Map for turn-by-turn routing.`,
+              personId: newPerson.personId,
+            }),
+          });
+        } catch (smsErr) {
+          console.warn('Mobile SMS dispatch error:', smsErr);
+        }
+      }
+    } catch (err: any) {
+      console.error('Error registering person:', err);
+      setErrorMessage(err.message || 'Failed to save person details. Please check network.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -465,7 +384,7 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Location GPS:</span>
-              <span className="font-mono text-slate-200">{(Number(registeredSuccess.lat) || 13.1120).toFixed(4)}, {(Number(registeredSuccess.lng) || 80.1030).toFixed(4)}</span>
+              <span className="font-mono text-slate-200">{registeredSuccess.lat.toFixed(4)}, {registeredSuccess.lng.toFixed(4)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Vitals Logged:</span>
@@ -487,7 +406,7 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
               className="px-4 py-2 bg-gradient-to-r from-[#ff7700] to-amber-500 hover:from-[#ff8811] hover:to-amber-400 text-white font-bold rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-[#ff7700]/30 transition"
             >
               <Compass className="w-4 h-4" />
-              <span>View {registeredSuccess.name} on Live Tactical Map ({(Number(registeredSuccess.lat) || 13.1120).toFixed(4)}, {(Number(registeredSuccess.lng) || 80.1030).toFixed(4)}) &rarr;</span>
+              <span>View {registeredSuccess.name} on Live Tactical Map ({registeredSuccess.lat.toFixed(4)}, {registeredSuccess.lng.toFixed(4)}) &rarr;</span>
             </button>
 
             {onOpenSmsModal && (
@@ -732,11 +651,8 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
                 <input
                   type="number"
                   step="0.0001"
-                  value={lat || ''}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    setLat(isNaN(v) ? 0 : v);
-                  }}
+                  value={lat}
+                  onChange={(e) => setLat(Number(e.target.value))}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-400"
                 />
               </div>
@@ -745,11 +661,8 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
                 <input
                   type="number"
                   step="0.0001"
-                  value={lng || ''}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    setLng(isNaN(v) ? 0 : v);
-                  }}
+                  value={lng}
+                  onChange={(e) => setLng(Number(e.target.value))}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-400"
                 />
               </div>
@@ -763,7 +676,7 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
                   Interactive GPS Pin Placement (Click map or drag pin to position person)
                 </span>
                 <span className="font-mono text-[#ff7700] bg-[#ff7700]/10 px-2 py-0.5 rounded border border-[#ff7700]/30 text-[11px]">
-                  {(!isNaN(Number(lat)) && Number(lat) !== 0 ? Number(lat) : 13.1120).toFixed(4)}, {(!isNaN(Number(lng)) && Number(lng) !== 0 ? Number(lng) : 80.1030).toFixed(4)}
+                  {lat.toFixed(4)}, {lng.toFixed(4)}
                 </span>
               </div>
               <div
