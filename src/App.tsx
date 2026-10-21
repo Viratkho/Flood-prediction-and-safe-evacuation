@@ -9,6 +9,7 @@ import { ResearchSimulationMode } from './components/ResearchSimulationMode';
 import { PersonIntakeForm } from './components/PersonIntakeForm';
 import { MobileAlertModal } from './components/MobileAlertModal';
 import { FirewallSecurityModal } from './components/FirewallSecurityModal';
+import { SystemTestRunnerModal } from './components/SystemTestRunnerModal';
 import {
   BASIN_CENTER,
   INITIAL_ROAD_NODES,
@@ -36,6 +37,7 @@ import {
 import { DEFAULT_HEALTH_THRESHOLDS, evaluateRescuePriority } from './services/priorityEngine';
 import { voiceNav } from './services/voiceNav';
 import {
+  Activity,
   AlertCircle,
   AlertTriangle,
   Bot,
@@ -75,6 +77,7 @@ export default function App() {
   const [isIntakeModalOpen, setIsIntakeModalOpen] = useState(false);
   const [isMobileAlertModalOpen, setIsMobileAlertModalOpen] = useState(false);
   const [isFirewallModalOpen, setIsFirewallModalOpen] = useState(false);
+  const [isTestRunnerOpen, setIsTestRunnerOpen] = useState(true);
   const [selectedAlertPerson, setSelectedAlertPerson] = useState<RegisteredPerson | null>(null);
   const [activeAdvisePerson, setActiveAdvisePerson] = useState<RegisteredPerson | null>(null);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
@@ -735,6 +738,19 @@ export default function App() {
             </span>
           </button>
 
+          {/* Live System Automated Testing Trigger */}
+          <button
+            onClick={() => setIsTestRunnerOpen(true)}
+            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-500/25 transition active:scale-95 animate-pulse"
+            title="Open Live Automated System Testing Console & Real-Time Diagnostics"
+          >
+            <Activity className="w-3.5 h-3.5" />
+            <span>Live Testing</span>
+            <span className="hidden lg:inline text-[9px] px-1.5 py-0.2 rounded bg-indigo-400/30 font-mono font-bold">
+              23 TESTS
+            </span>
+          </button>
+
           {/* Emergency Mobile SMS Alert Gateway Trigger */}
           <button
             onClick={() => handleOpenSmsModal(people[0])}
@@ -930,6 +946,21 @@ export default function App() {
       <FirewallSecurityModal
         isOpen={isFirewallModalOpen}
         onClose={() => setIsFirewallModalOpen(false)}
+      />
+
+      {/* Live System Automated Testing Console & Live Diagnostics Modal */}
+      <SystemTestRunnerModal
+        isOpen={isTestRunnerOpen}
+        onClose={() => setIsTestRunnerOpen(false)}
+        onTriggerHydrologySync={async () => {
+          try {
+            const damRes = await fetch('/api/dam');
+            if (damRes.ok) {
+              const d = await damRes.json();
+              setDamTelemetry(d);
+            }
+          } catch {}
+        }}
       />
     </div>
   );
