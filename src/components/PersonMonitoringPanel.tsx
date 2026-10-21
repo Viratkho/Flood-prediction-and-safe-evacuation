@@ -736,7 +736,7 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
               <div className="bg-slate-900 p-2 rounded border border-slate-800">
                 <span className="text-slate-500 block">COORDINATES</span>
                 <span className="text-slate-200">
-                  {selectedPerson.lat.toFixed(4)}, {selectedPerson.lng.toFixed(4)}
+                  {(Number(selectedPerson.lat) || 13.1120).toFixed(4)}, {(Number(selectedPerson.lng) || 80.1030).toFixed(4)}
                 </span>
               </div>
               <div className="bg-slate-900 p-2 rounded border border-slate-800">

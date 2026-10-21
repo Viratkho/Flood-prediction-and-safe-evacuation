@@ -448,12 +448,12 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
             <div class="flex justify-between"><span>Flood Depth:</span> <strong class="text-blue-700">${person.floodDepthCm} cm</strong></div>
             <div class="flex justify-between"><span>Mobile SMS:</span> <strong class="text-emerald-700">${person.contactNumber || 'Available'}</strong></div>
             <div class="flex justify-between"><span>Drift Status:</span> <strong class="${isDrifting ? 'text-cyan-700 font-bold' : ''}">${person.driftStatus}</strong></div>
-            <div class="flex justify-between"><span>GPS Position:</span> <span>${person.lat.toFixed(4)}, ${person.lng.toFixed(4)}</span></div>
+            <div class="flex justify-between"><span>GPS Position:</span> <span>${(Number(person.lat) || 13.1120).toFixed(4)}, ${(Number(person.lng) || 80.1030).toFixed(4)}</span></div>
             <div class="flex justify-between"><span>GPS Accuracy:</span> <span>±${person.gpsAccuracyM}m (Pinned)</span></div>
           </div>
           ${cleanPhone ? `
             <div class="mt-2 pt-1.5 border-t flex justify-end">
-              <a href="sms:${cleanPhone}?body=${encodeURIComponent(`[URGENT FLOODGUARD ALERT] Priority ${person.rescuePriority} evaluated for ${person.name}. Flood level: ${person.floodDepthCm}cm at (${person.lat.toFixed(4)}, ${person.lng.toFixed(4)}). Follow NDRF evacuation route to nearest shelter.`)}"
+              <a href="sms:${cleanPhone}?body=${encodeURIComponent(`[URGENT FLOODGUARD ALERT] Priority ${person.rescuePriority} evaluated for ${person.name}. Flood level: ${person.floodDepthCm}cm at (${(Number(person.lat) || 13.1120).toFixed(4)}, ${(Number(person.lng) || 80.1030).toFixed(4)}). Follow NDRF evacuation route to nearest shelter.`)}"
                  target="_blank"
                  class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] rounded flex items-center gap-1 shadow">
                 <span>📱 Send Real SMS to ${cleanPhone}</span>
@@ -660,7 +660,7 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
                 </span>
               </div>
               <div className="text-[11px] text-slate-300 font-mono flex items-center gap-2 truncate">
-                <span>GPS: {selectedPersonForInspection.lat.toFixed(4)}, {selectedPersonForInspection.lng.toFixed(4)}</span>
+                <span>GPS: {(Number(selectedPersonForInspection.lat) || 13.1120).toFixed(4)}, {(Number(selectedPersonForInspection.lng) || 80.1030).toFixed(4)}</span>
                 <span>•</span>
                 <span>Depth: {selectedPersonForInspection.floodDepthCm}cm</span>
                 <span>•</span>
