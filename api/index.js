@@ -1107,21 +1107,14 @@ app.use((req, res, next) => {
   }
   next();
 });
-var PERSISTED_PEOPLE_FILE = path.join(__dirname, ".registered_people.json");
+var PERSISTED_PEOPLE_FILE = process.env.VERCEL ? path.join("/tmp", ".registered_people.json") : path.join(__dirname, ".registered_people.json");
 var loadPersistedPeople = () => {
   try {
     if (fs.existsSync(PERSISTED_PEOPLE_FILE)) {
       const content = fs.readFileSync(PERSISTED_PEOPLE_FILE, "utf-8");
       const parsed = JSON.parse(content);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const idMap = new Map(parsed.map((p) => [p.personId, p]));
-        const combined = [...parsed];
-        for (const initP of INITIAL_REGISTERED_PEOPLE) {
-          if (!idMap.has(initP.personId)) {
-            combined.push(initP);
-          }
-        }
-        return combined;
+      if (Array.isArray(parsed)) {
+        return parsed;
       }
     }
   } catch (err) {
@@ -1137,13 +1130,13 @@ var savePersistedPeople = (list) => {
   }
 };
 var peopleState = loadPersistedPeople();
-var PERSISTED_INCIDENTS_FILE = path.join(__dirname, ".incidents.json");
+var PERSISTED_INCIDENTS_FILE = process.env.VERCEL ? path.join("/tmp", ".incidents.json") : path.join(__dirname, ".incidents.json");
 var loadPersistedIncidents = () => {
   try {
     if (fs.existsSync(PERSISTED_INCIDENTS_FILE)) {
       const content = fs.readFileSync(PERSISTED_INCIDENTS_FILE, "utf-8");
       const parsed = JSON.parse(content);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
@@ -1352,7 +1345,8 @@ app.post("/api/people", (req, res) => {
       sosActive,
       currentWaterDepthCm
     } = req.body;
-    if (!name || !name.trim()) {
+    const personName = (name || req.body.fullName || "").trim();
+    if (!personName) {
       return res.status(400).json({ error: "Person name is required" });
     }
     const personId = `P-${Date.now().toString().slice(-4)}`;
@@ -1365,7 +1359,7 @@ app.post("/api/people", (req, res) => {
     const initialPerson = {
       personId,
       wearableId,
-      name: name.trim(),
+      name: personName,
       age: age ? Number(age) : void 0,
       gender: gender || "Unspecified",
       contactNumber: contactNumber || "+91 98400 00000",
@@ -1487,6 +1481,33 @@ app.post("/api/people", (req, res) => {
   } catch (err) {
     console.error("Error saving person intake:", err);
     res.status(500).json({ error: "Failed to save person intake details" });
+  }
+});
+app.delete("/api/people/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: "Person ID is required" });
+    }
+    const initialCount = peopleState.length;
+    const removedPerson = peopleState.find((p) => p.personId === id || p.wearableId === id);
+    peopleState = peopleState.filter((p) => p.personId !== id && p.wearableId !== id);
+    savePersistedPeople(peopleState);
+    const initialIncidentsCount = incidentsState.length;
+    incidentsState = incidentsState.filter((inc) => inc.personId !== id);
+    if (incidentsState.length !== initialIncidentsCount) {
+      savePersistedIncidents(incidentsState);
+    }
+    return res.json({
+      success: true,
+      personId: id,
+      deletedPerson: removedPerson || null,
+      message: `Person ${id} deleted successfully and unpinned from tactical map.`,
+      remainingCount: peopleState.length
+    });
+  } catch (err) {
+    console.error("Error deleting person:", err);
+    res.status(500).json({ error: "Failed to delete person record" });
   }
 });
 app.get("/api/alerts", (_req, res) => {

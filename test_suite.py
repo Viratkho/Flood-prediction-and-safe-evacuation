@@ -71,6 +71,18 @@ code, res = request("POST", "/api/people", valid_person)
 if code in (200, 201) and isinstance(res, dict) and "person" in res:
     created_id = res["person"]["personId"]
     test("TC-BE-001: Person Registration Valid", "PASS", f"Created person ID {created_id}, Priority: {res['person'].get('rescuePriority')}")
+    
+    # Verify person deletion and permanent unpinning
+    del_code, del_res = request("DELETE", f"/api/people/{created_id}")
+    if del_code == 200 and isinstance(del_res, dict) and del_res.get("success"):
+        get_code, get_res = request("GET", "/api/people")
+        remaining_ids = [p["personId"] for p in get_res.get("people", [])] if get_code == 200 else []
+        if created_id not in remaining_ids:
+            test("TC-BE-001B: Person Deletion Permanent", "PASS", f"Person {created_id} permanently removed from registry and unpinned")
+        else:
+            test("TC-BE-001B: Person Deletion Permanent", "FAIL", f"Person {created_id} still present in GET /api/people")
+    else:
+        test("TC-BE-001B: Person Deletion Permanent", "FAIL", f"HTTP {del_code}: {del_res}")
 else:
     test("TC-BE-001: Person Registration Valid", "FAIL", f"HTTP {code}: {res}")
 

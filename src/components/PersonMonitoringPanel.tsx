@@ -32,6 +32,7 @@ import {
   WifiOff,
   X,
   Bot,
+  Trash2,
 } from 'lucide-react';
 
 interface PersonMonitoringPanelProps {
@@ -42,6 +43,7 @@ interface PersonMonitoringPanelProps {
   onOpenSmsModal?: (person: RegisteredPerson) => void;
   onOpenIntakeModal?: () => void;
   onAdviseWithAi?: (person: RegisteredPerson) => void;
+  onRemovePerson?: (personId: string) => void;
   thresholds?: HealthThresholds;
   onUpdateThresholds?: (t: HealthThresholds) => void;
 }
@@ -54,6 +56,7 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
   onOpenSmsModal,
   onOpenIntakeModal,
   onAdviseWithAi,
+  onRemovePerson,
   thresholds = DEFAULT_HEALTH_THRESHOLDS,
   onUpdateThresholds,
 }) => {
@@ -537,6 +540,28 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
                       </button>
                     )}
 
+                    {onRemovePerson && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (
+                            window.confirm(
+                              `Are you sure you want to permanently remove "${person.name}" (${person.personId}) from the rescue database and tactical map?`
+                            )
+                          ) {
+                            onRemovePerson(person.personId);
+                            if (selectedPerson?.personId === person.personId) {
+                              setSelectedPerson(null);
+                            }
+                          }
+                        }}
+                        className="p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition hover:border-rose-500/60"
+                        title={`Permanently remove ${person.name} from monitoring`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+
                     <ChevronRight className="w-4 h-4 text-slate-500" />
                   </div>
                 </div>
@@ -785,6 +810,26 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
               >
                 <Bot className="w-4 h-4" />
                 Get Personalized Aegis AI Guidance
+              </button>
+            )}
+
+            {onRemovePerson && (
+              <button
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Are you sure you want to permanently remove "${selectedPerson.name}" (${selectedPerson.personId}) from the rescue database and tactical map?`
+                    )
+                  ) {
+                    const idToRemove = selectedPerson.personId;
+                    setSelectedPerson(null);
+                    onRemovePerson(idToRemove);
+                  }
+                }}
+                className="w-full py-2.5 px-3 rounded-xl bg-rose-600/20 hover:bg-rose-600/35 text-rose-300 border border-rose-500/40 font-bold text-xs flex items-center justify-center gap-2 shadow transition"
+              >
+                <Trash2 className="w-4 h-4 text-rose-400" />
+                <span>Permanently Remove from Registry & Tactical Map</span>
               </button>
             )}
           </div>

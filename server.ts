@@ -1232,7 +1232,9 @@ app.use((req, res, next) => {
 
 
 
-const PERSISTED_PEOPLE_FILE = path.join(__dirname, '.registered_people.json');
+const PERSISTED_PEOPLE_FILE = process.env.VERCEL
+  ? path.join('/tmp', '.registered_people.json')
+  : path.join(__dirname, '.registered_people.json');
 
 
 
@@ -1260,42 +1262,8 @@ const loadPersistedPeople = (): RegisteredPerson[] => {
 
 
 
-      if (Array.isArray(parsed) && parsed.length > 0) {
-
-
-
-        const idMap = new Map(parsed.map((p: RegisteredPerson) => [p.personId, p]));
-
-
-
-        const combined = [...parsed];
-
-
-
-        for (const initP of INITIAL_REGISTERED_PEOPLE) {
-
-
-
-          if (!idMap.has(initP.personId)) {
-
-
-
-            combined.push(initP);
-
-
-
-          }
-
-
-
-        }
-
-
-
-        return combined;
-
-
-
+      if (Array.isArray(parsed)) {
+        return parsed;
       }
 
 
@@ -1364,7 +1332,9 @@ let peopleState: RegisteredPerson[] = loadPersistedPeople();
 
 
 
-const PERSISTED_INCIDENTS_FILE = path.join(__dirname, '.incidents.json');
+const PERSISTED_INCIDENTS_FILE = process.env.VERCEL
+  ? path.join('/tmp', '.incidents.json')
+  : path.join(__dirname, '.incidents.json');
 
 
 
@@ -1378,7 +1348,7 @@ const loadPersistedIncidents = (): IncidentRecord[] => {
 
       const parsed = JSON.parse(content);
 
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
 
         return parsed;
 
@@ -2298,14 +2268,9 @@ app.post('/api/people', (req: Request, res: Response) => {
 
 
 
-    if (!name || !name.trim()) {
-
-
-
+    const personName = (name || (req.body as any).fullName || '').trim();
+    if (!personName) {
       return res.status(400).json({ error: 'Person name is required' });
-
-
-
     }
 
 
@@ -2362,7 +2327,7 @@ app.post('/api/people', (req: Request, res: Response) => {
 
 
 
-      name: name.trim(),
+      name: personName,
 
 
 
@@ -2886,16 +2851,43 @@ app.post('/api/people', (req: Request, res: Response) => {
 
     console.error('Error saving person intake:', err);
 
-
-
     res.status(500).json({ error: 'Failed to save person intake details' });
-
-
 
   }
 
+});
 
+// Citizen Removal / De-registration Endpoint
+app.delete('/api/people/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: 'Person ID is required' });
+    }
 
+    const initialCount = peopleState.length;
+    const removedPerson = peopleState.find(p => p.personId === id || p.wearableId === id);
+    peopleState = peopleState.filter(p => p.personId !== id && p.wearableId !== id);
+    savePersistedPeople(peopleState);
+
+    // Also remove any linked incidents
+    const initialIncidentsCount = incidentsState.length;
+    incidentsState = incidentsState.filter(inc => inc.personId !== id);
+    if (incidentsState.length !== initialIncidentsCount) {
+      savePersistedIncidents(incidentsState);
+    }
+
+    return res.json({
+      success: true,
+      personId: id,
+      deletedPerson: removedPerson || null,
+      message: `Person ${id} deleted successfully and unpinned from tactical map.`,
+      remainingCount: peopleState.length,
+    });
+  } catch (err: unknown) {
+    console.error('Error deleting person:', err);
+    res.status(500).json({ error: 'Failed to delete person record' });
+  }
 });
 
 

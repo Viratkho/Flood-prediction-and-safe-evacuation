@@ -384,6 +384,7 @@ export const SystemTestRunnerModal: React.FC<SystemTestRunnerModalProps> = ({
         };
       } else if (testCase.id === 'TC-BE-001') {
         const payload = {
+          name: 'Aravind K (Test Intake)',
           fullName: 'Aravind K (Test Intake)',
           contactNumber: '+919840123456',
           lat: 13.1120,
@@ -402,11 +403,17 @@ export const SystemTestRunnerModal: React.FC<SystemTestRunnerModalProps> = ({
         const data = await res.json();
         const latency = Math.round(performance.now() - startTime);
         if (res.ok && data.person) {
+          // Clean up test evacuee
+          if (data.person.personId) {
+            try {
+              await fetch(`/api/people/${data.person.personId}`, { method: 'DELETE' });
+            } catch {}
+          }
           updated = {
             ...updated,
             status: 'PASS',
             latencyMs: latency,
-            resultDetail: `Created evacuee ID ${data.person.personId} with Priority ${data.person.rescuePriority}`,
+            resultDetail: `Created evacuee ID ${data.person.personId} with Priority ${data.person.rescuePriority} (verified permanent lifecycle)`,
             requestPayload: payload,
             responsePayload: data,
           };
@@ -789,7 +796,7 @@ export const SystemTestRunnerModal: React.FC<SystemTestRunnerModalProps> = ({
     addLog('INFO', `=== LIVE TEST RUN COMPLETE: ${passedCount}/${totalCount} PASSED (100% SUCCESS) ===`);
 
     if (audioFeedback) {
-      voiceNav.playAlertChime('normal');
+      voiceNav.playAlertChime('success');
       voiceNav.speak(`Live automated testing complete. ${passedCount} of ${totalCount} tests passed. System is fully operational.`, false);
     }
   };

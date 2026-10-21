@@ -90,20 +90,23 @@ export default function App() {
   // Health-Aware People & Incidents State (Persists across reloads)
   const [people, setPeople] = useState<RegisteredPerson[]>(() => {
     try {
+      const deletedStored = localStorage.getItem('floodguard_deleted_people');
+      const deletedIds = new Set<string>(deletedStored ? JSON.parse(deletedStored) : []);
       const stored = localStorage.getItem('floodguard_user_people');
       if (stored) {
         const localList: RegisteredPerson[] = JSON.parse(stored);
         if (Array.isArray(localList) && localList.length > 0) {
           const map = new Map(localList.map((p) => [p.personId, p]));
-          const combined = [...localList];
+          const combined = localList.filter((p) => !deletedIds.has(p.personId));
           for (const initP of INITIAL_REGISTERED_PEOPLE) {
-            if (!map.has(initP.personId)) {
+            if (!map.has(initP.personId) && !deletedIds.has(initP.personId)) {
               combined.push(initP);
             }
           }
           return combined;
         }
       }
+      return INITIAL_REGISTERED_PEOPLE.filter((p) => !deletedIds.has(p.personId));
     } catch (e) {
       console.warn('LocalStorage people initialization error:', e);
     }
@@ -174,10 +177,15 @@ export default function App() {
             try {
               const stored = localStorage.getItem('floodguard_user_people');
               const localList: RegisteredPerson[] = stored ? JSON.parse(stored) : [];
-              const backendMap = new Map(data.people.map((p: RegisteredPerson) => [p.personId, p]));
-              const merged = [...data.people];
+              const deletedStored = localStorage.getItem('floodguard_deleted_people');
+              const deletedIds = new Set<string>(deletedStored ? JSON.parse(deletedStored) : []);
+
+              const validBackendPeople = data.people.filter((p: RegisteredPerson) => !deletedIds.has(p.personId));
+              const backendMap = new Map(validBackendPeople.map((p: RegisteredPerson) => [p.personId, p]));
+
+              const merged = [...validBackendPeople];
               for (const lp of localList) {
-                if (!backendMap.has(lp.personId)) {
+                if (!deletedIds.has(lp.personId) && !backendMap.has(lp.personId)) {
                   merged.unshift(lp);
                 }
               }
@@ -553,6 +561,13 @@ export default function App() {
       const updated = [newPerson, ...prev.filter((p) => p.personId !== newPerson.personId)];
       try {
         localStorage.setItem('floodguard_user_people', JSON.stringify(updated));
+        // Remove from deleted list if present
+        const deletedRaw = localStorage.getItem('floodguard_deleted_people');
+        if (deletedRaw) {
+          const deletedList: string[] = JSON.parse(deletedRaw);
+          const filtered = deletedList.filter((id) => id !== newPerson.personId);
+          localStorage.setItem('floodguard_deleted_people', JSON.stringify(filtered));
+        }
       } catch (err) {
         console.warn('LocalStorage save error:', err);
       }
@@ -572,6 +587,48 @@ export default function App() {
       `Emergency registration recorded for ${newPerson.name}. Plotting GPS location on live tactical map. Priority evaluated as ${newPerson.rescuePriority}.`,
       false
     );
+  };
+
+  const handleRemovePerson = async (personId: string) => {
+    // 1. Remove from local state and update localStorage
+    setPeople((prev) => {
+      const updated = prev.filter((p) => p.personId !== personId);
+      try {
+        localStorage.setItem('floodguard_user_people', JSON.stringify(updated));
+        const deletedRaw = localStorage.getItem('floodguard_deleted_people');
+        const deletedList: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
+        if (!deletedList.includes(personId)) {
+          deletedList.push(personId);
+          localStorage.setItem('floodguard_deleted_people', JSON.stringify(deletedList));
+        }
+      } catch (err) {
+        console.warn('LocalStorage remove error:', err);
+      }
+      return updated;
+    });
+
+    // 2. Clear focus if this person was focused
+    if (focusedPersonId === personId) {
+      setFocusedPersonId(null);
+    }
+    if (selectedAlertPerson?.personId === personId) {
+      setSelectedAlertPerson(null);
+    }
+    if (activeAdvisePerson?.personId === personId) {
+      setActiveAdvisePerson(null);
+    }
+
+    // 3. Remove associated incidents
+    setIncidents((prev) => prev.filter((inc) => inc.personId !== personId));
+
+    // 4. Send DELETE request to backend
+    try {
+      await fetch(`/api/people/${personId}`, { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Backend DELETE person request failed (remains deleted locally):', err);
+    }
+
+    voiceNav.speak('Person record removed permanently from rescue monitoring.', false);
   };
 
   const handleOpenSmsModal = (person?: RegisteredPerson | null) => {
@@ -818,6 +875,7 @@ export default function App() {
             onOpenSmsModal={handleOpenSmsModal}
             onOpenIntakeModal={() => setIsIntakeModalOpen(true)}
             onAdviseWithAi={handleAdviseWithAi}
+            onRemovePerson={handleRemovePerson}
             onSelectPersonOnMap={(p) => {
               setSelectedFocusLocation([p.lat, p.lng]);
               setFocusedPersonId(p.personId);
@@ -834,6 +892,7 @@ export default function App() {
                 handlePersonRegistered(person, showOnMap);
               }}
               onOpenSmsModal={handleOpenSmsModal}
+              onNavigateToPersonMonitoring={() => setActiveTab('person-monitoring')}
             />
           </div>
         )}
@@ -894,6 +953,10 @@ export default function App() {
               }}
               onClose={() => setIsIntakeModalOpen(false)}
               onOpenSmsModal={handleOpenSmsModal}
+              onNavigateToPersonMonitoring={() => {
+                setIsIntakeModalOpen(false);
+                setActiveTab('person-monitoring');
+              }}
             />
           </div>
         </div>

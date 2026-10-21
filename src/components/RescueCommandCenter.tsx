@@ -385,6 +385,10 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
 
     // Render Registered People
     people.forEach((person) => {
+      const pLat = Number(person.lat);
+      const pLng = Number(person.lng);
+      if (isNaN(pLat) || isNaN(pLng)) return;
+
       const isSos = person.sosActive;
       const isP0 = person.rescuePriority === 'P0';
       const isP1 = person.rescuePriority === 'P1';
@@ -426,7 +430,7 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
         iconAnchor: [24, 28],
       });
 
-      const marker = L.marker([person.lat, person.lng], { icon: markerIcon });
+      const marker = L.marker([pLat, pLng], { icon: markerIcon });
       marker.on('click', () => {
         setSelectedPersonForInspection(person);
       });
