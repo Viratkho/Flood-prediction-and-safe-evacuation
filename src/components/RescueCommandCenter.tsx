@@ -26,6 +26,7 @@ import {
   Radio,
   RefreshCw,
   Shield,
+  Smartphone,
   Waves,
   X,
   Zap,
@@ -46,6 +47,7 @@ interface RescueCommandCenterProps {
   selectedFocusLocation?: [number, number] | null;
   focusedPersonId?: string | null;
   onNavigateToPersonMonitoring?: () => void;
+  onOpenSmsModal?: (person: RegisteredPerson) => void;
 }
 
 export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
@@ -62,6 +64,7 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
   selectedFocusLocation,
   focusedPersonId,
   onNavigateToPersonMonitoring,
+  onOpenSmsModal,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -121,8 +124,12 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
     radarBeaconLayerRef.current = L.layerGroup().addTo(map);
 
     mapInstanceRef.current = map;
+    const resizeTimer = setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
 
     return () => {
+      clearTimeout(resizeTimer);
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -131,6 +138,9 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
   // Enhanced focus and highlight on person coordinate when triggered
   useEffect(() => {
     if (!mapInstanceRef.current || !selectedFocusLocation) return;
+
+    // Invalidate size to ensure map layout is fresh
+    mapInstanceRef.current.invalidateSize();
 
     // Ensure wearable/people layer is active
     setVisibleLayers((prev) => (prev.wearables ? prev : { ...prev, wearables: true }));
@@ -145,62 +155,73 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
     const matchedPerson = people.find((p) => {
       if (focusedPersonId && p.personId === focusedPersonId) return true;
       return (
-        Math.abs(p.lat - selectedFocusLocation[0]) < 0.0003 &&
-        Math.abs(p.lng - selectedFocusLocation[1]) < 0.0003
+        Math.abs(p.lat - selectedFocusLocation[0]) < 0.005 &&
+        Math.abs(p.lng - selectedFocusLocation[1]) < 0.005
       );
     });
 
     if (matchedPerson) {
       setSelectedPersonForInspection(matchedPerson);
-
-      // Open marker popup after map flies to location
-      const timer = setTimeout(() => {
-        const marker = personMarkersRef.current.get(matchedPerson.personId);
-        if (marker) {
-          marker.openPopup();
-        }
-      }, 400);
-
-      // Render glowing radar beacon ripple on map
-      if (radarBeaconLayerRef.current) {
-        radarBeaconLayerRef.current.clearLayers();
-
-        const isSos = matchedPerson.sosActive || matchedPerson.rescuePriority === 'P0';
-        const ringColor = isSos ? '#ef4444' : '#ff7700';
-
-        const beaconIcon = L.divIcon({
-          className: 'gps-person-beacon-pulse pointer-events-none',
-          html: `
-            <div class="relative flex items-center justify-center pointer-events-none" style="width: 48px; height: 48px;">
-              <div class="absolute w-24 h-24 rounded-full border-2 animate-radar-ping" style="border-color: ${ringColor};"></div>
-              <div class="absolute w-12 h-12 rounded-full border-2 animate-ping opacity-75" style="border-color: ${ringColor};"></div>
-              <div class="w-4 h-4 rounded-full shadow-lg" style="background-color: ${ringColor};"></div>
-            </div>
-          `,
-          iconSize: [48, 48],
-          iconAnchor: [24, 24],
-        });
-
-        const beaconMarker = L.marker([matchedPerson.lat, matchedPerson.lng], {
-          icon: beaconIcon,
-          zIndexOffset: 1500,
-        });
-
-        radarBeaconLayerRef.current.addLayer(beaconMarker);
-
-        // Auto fade beacon ring after 15 seconds
-        const clearTimer = setTimeout(() => {
-          radarBeaconLayerRef.current?.clearLayers();
-        }, 15000);
-
-        return () => {
-          clearTimeout(timer);
-          clearTimeout(clearTimer);
-        };
-      }
-
-      return () => clearTimeout(timer);
     }
+
+    // Open marker popup with immediate and deferred retries to handle fly animation & layer rendering
+    const openPopupIfReady = () => {
+      if (!matchedPerson) return;
+      const marker = personMarkersRef.current.get(matchedPerson.personId);
+      if (marker) {
+        marker.openPopup();
+      }
+    };
+
+    const timer1 = setTimeout(openPopupIfReady, 400);
+    const timer2 = setTimeout(openPopupIfReady, 1000);
+    const timer3 = setTimeout(openPopupIfReady, 1500);
+
+    // Render glowing radar beacon ripple on map
+    if (radarBeaconLayerRef.current) {
+      radarBeaconLayerRef.current.clearLayers();
+
+      const isSos = matchedPerson ? (matchedPerson.sosActive || matchedPerson.rescuePriority === 'P0') : false;
+      const ringColor = isSos ? '#ef4444' : '#ff7700';
+
+      const beaconIcon = L.divIcon({
+        className: 'gps-person-beacon-pulse pointer-events-none',
+        html: `
+          <div class="relative flex items-center justify-center pointer-events-none" style="width: 48px; height: 48px;">
+            <div class="absolute w-24 h-24 rounded-full border-2 animate-radar-ping" style="border-color: ${ringColor};"></div>
+            <div class="absolute w-12 h-12 rounded-full border-2 animate-ping opacity-75" style="border-color: ${ringColor};"></div>
+            <div class="w-4 h-4 rounded-full shadow-lg" style="background-color: ${ringColor};"></div>
+          </div>
+        `,
+        iconSize: [48, 48],
+        iconAnchor: [24, 24],
+      });
+
+      const beaconMarker = L.marker([selectedFocusLocation[0], selectedFocusLocation[1]], {
+        icon: beaconIcon,
+        zIndexOffset: 1500,
+      });
+
+      radarBeaconLayerRef.current.addLayer(beaconMarker);
+
+      // Auto fade beacon ring after 15 seconds
+      const clearTimer = setTimeout(() => {
+        radarBeaconLayerRef.current?.clearLayers();
+      }, 15000);
+
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        clearTimeout(timer3);
+        clearTimeout(clearTimer);
+      };
+    }
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+    };
   }, [selectedFocusLocation, focusedPersonId, people]);
 
   // Update tile theme class
@@ -380,15 +401,20 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
         ? '#38bdf8' // Blue
         : '#10b981'; // Green
 
+      const isUserRegistered = person.isUserRegistered;
+      const cleanPhone = (person.contactNumber || '').replace(/[^0-9+]/g, '');
+
       const iconHtml = `
         <div class="relative flex flex-col items-center cursor-pointer group">
           <div class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-white shadow-lg border border-white flex items-center gap-1 ${
             isSos || isP0 ? 'animate-emergency-pulse' : ''
           }" style="background-color: ${badgeColor};">
-            ${isSos ? '🆘' : isDrifting ? '🌊' : ''}
+            ${isSos ? '🆘' : isDrifting ? '🌊' : isUserRegistered ? '📍' : ''}
             <span>${person.rescuePriority}</span>
+            ${isUserRegistered ? '<span class="text-[8px] bg-black/40 px-1 rounded text-amber-200">PINNED</span>' : ''}
           </div>
           <div class="w-2 h-2 rotate-45 -mt-1 border-r border-b border-white" style="background-color: ${badgeColor};"></div>
+          ${isUserRegistered ? '<div class="text-[9px] font-bold text-amber-300 font-mono drop-shadow bg-slate-950/90 px-1 rounded mt-0.5 border border-amber-500/40 whitespace-nowrap">📍 PERMANENT PIN</div>' : ''}
           ${isDrifting ? '<div class="text-[9px] font-bold text-cyan-300 font-mono drop-shadow">DRIFTING</div>' : ''}
         </div>
       `;
@@ -406,7 +432,8 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
       });
 
       marker.bindPopup(`
-        <div class="text-slate-900 p-1 min-w-[210px] text-xs">
+        <div class="text-slate-900 p-1 min-w-[220px] text-xs">
+          ${isUserRegistered ? '<div class="bg-amber-500/20 text-amber-900 border border-amber-500/40 rounded px-1.5 py-0.5 font-bold text-[10px] mb-1 flex items-center gap-1"><span>📍</span><span>PERMANENTLY PINNED CITIZEN LOCATION</span></div>' : ''}
           <div class="flex justify-between items-center mb-1">
             <span class="font-bold text-[10px] uppercase text-slate-500">${person.personId} • ${person.wearableId}</span>
             <span class="font-bold px-1.5 py-0.2 rounded text-white text-[10px]" style="background-color: ${badgeColor}">
@@ -421,8 +448,18 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
             <div class="flex justify-between"><span>Flood Depth:</span> <strong class="text-blue-700">${person.floodDepthCm} cm</strong></div>
             <div class="flex justify-between"><span>Mobile SMS:</span> <strong class="text-emerald-700">${person.contactNumber || 'Available'}</strong></div>
             <div class="flex justify-between"><span>Drift Status:</span> <strong class="${isDrifting ? 'text-cyan-700 font-bold' : ''}">${person.driftStatus}</strong></div>
-            <div class="flex justify-between"><span>GPS Accuracy:</span> <span>±${person.gpsAccuracyM}m</span></div>
+            <div class="flex justify-between"><span>GPS Position:</span> <span>${person.lat.toFixed(4)}, ${person.lng.toFixed(4)}</span></div>
+            <div class="flex justify-between"><span>GPS Accuracy:</span> <span>±${person.gpsAccuracyM}m (Pinned)</span></div>
           </div>
+          ${cleanPhone ? `
+            <div class="mt-2 pt-1.5 border-t flex justify-end">
+              <a href="sms:${cleanPhone}?body=${encodeURIComponent(`[URGENT FLOODGUARD ALERT] Priority ${person.rescuePriority} evaluated for ${person.name}. Flood level: ${person.floodDepthCm}cm at (${person.lat.toFixed(4)}, ${person.lng.toFixed(4)}). Follow NDRF evacuation route to nearest shelter.`)}"
+                 target="_blank"
+                 class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] rounded flex items-center gap-1 shadow">
+                <span>📱 Send Real SMS to ${cleanPhone}</span>
+              </a>
+            </div>
+          ` : ''}
         </div>
       `);
 
@@ -631,6 +668,17 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+              {onOpenSmsModal && selectedPersonForInspection.contactNumber && (
+                <button
+                  type="button"
+                  onClick={() => onOpenSmsModal(selectedPersonForInspection)}
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1 shadow"
+                  title="Send Emergency Alert SMS"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Send Real Alert SMS</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -943,14 +991,26 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
               <span>Updated: {selectedPersonForInspection.locationTimestamp}</span>
             </div>
 
-            {onNavigateToPersonMonitoring && (
-              <button
-                onClick={onNavigateToPersonMonitoring}
-                className="w-full py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs uppercase tracking-wider"
-              >
-                Open in Person Monitoring Panel →
-              </button>
-            )}
+            <div className="space-y-1.5 pt-1">
+              {onOpenSmsModal && selectedPersonForInspection.contactNumber && (
+                <button
+                  onClick={() => onOpenSmsModal(selectedPersonForInspection)}
+                  className="w-full py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Send Real Mobile SMS Alert</span>
+                </button>
+              )}
+
+              {onNavigateToPersonMonitoring && (
+                <button
+                  onClick={onNavigateToPersonMonitoring}
+                  className="w-full py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs uppercase tracking-wider"
+                >
+                  Open in Person Monitoring Panel →
+                </button>
+              )}
+            </div>
           </div>
         )}
 

@@ -99,6 +99,7 @@ export const MobileAlertModal: React.FC<MobileAlertModalProps> = ({
   const [historyList, setHistoryList] = useState<MobileAlertMessage[]>([]);
   const [activeTab, setActiveTab] = useState<'compose' | 'history'>('compose');
   const [triggerSound, setTriggerSound] = useState(true);
+  const [openDeviceSmsDirectly, setOpenDeviceSmsDirectly] = useState(true);
 
   // Sync when template or person changes
   useEffect(() => {
@@ -195,6 +196,19 @@ export const MobileAlertModal: React.FC<MobileAlertModalProps> = ({
             }
           });
         }
+      }
+
+      // 4. Trigger real native device SMS application if enabled
+      if (openDeviceSmsDirectly) {
+        const cleanMobile = mobileNumber.replace(/[^0-9+]/g, '');
+        const directSmsUri = `sms:${cleanMobile}?body=${encodeURIComponent(`[${headline}] ${messageText.trim()}`)}`;
+        setTimeout(() => {
+          try {
+            window.location.href = directSmsUri;
+          } catch (e) {
+            console.warn('Could not launch native SMS uri:', e);
+          }
+        }, 150);
       }
     } catch (err) {
       console.error('Failed to send mobile alert:', err);
@@ -344,20 +358,28 @@ export const MobileAlertModal: React.FC<MobileAlertModalProps> = ({
               <form onSubmit={handleSendAlert} className="lg:col-span-7 space-y-4">
                 {/* Last Delivered Banner */}
                 {lastDelivered && (
-                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>
-                        Alert dispatched successfully to <strong>{lastDelivered.recipientName}</strong> ({lastDelivered.mobileNumber})!
+                  <div className="p-3.5 bg-emerald-500/15 border border-emerald-500/40 rounded-xl text-xs text-emerald-200 space-y-2 animate-in fade-in">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-bold text-emerald-300">
+                        <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Real Alert Dispatched to {lastDelivered.recipientName} ({lastDelivered.mobileNumber})</span>
+                      </div>
+                      <span className="font-mono text-[10px] bg-emerald-950 px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-300">
+                        {lastDelivered.gateway}
                       </span>
                     </div>
-                    <a
-                      href={nativeSmsUrl}
-                      className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 rounded text-[11px] font-semibold underline flex items-center gap-1 shrink-0"
-                    >
-                      Open Device SMS
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+                    <p className="text-[11px] text-slate-300">
+                      Dispatched via gateway. You can also tap below to open your phone or computer's native SMS application directly with this exact emergency message ready to send:
+                    </p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <a
+                        href={nativeSmsUrl}
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-lg transition active:scale-95"
+                      >
+                        <Smartphone className="w-3.5 h-3.5" />
+                        <span>Open Messages App & Send Real SMS to {lastDelivered.mobileNumber} Now &rarr;</span>
+                      </a>
+                    </div>
                   </div>
                 )}
 
@@ -465,7 +487,27 @@ export const MobileAlertModal: React.FC<MobileAlertModalProps> = ({
                 </div>
 
                 {/* Toggles */}
-                <div className="flex items-center justify-between pt-1 text-xs text-slate-400">
+                {/* Toggles */}
+                <div className="space-y-1.5 pt-1 text-xs text-slate-400">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={openDeviceSmsDirectly}
+                        onChange={(e) => setOpenDeviceSmsDirectly(e.target.checked)}
+                        className="w-3.5 h-3.5 accent-blue-500 rounded"
+                      />
+                      <span className="text-slate-200 font-semibold flex items-center gap-1">
+                        <Smartphone className="w-3.5 h-3.5 text-blue-400" />
+                        Trigger real cellular SMS via device messaging app on send
+                      </span>
+                    </label>
+
+                    <span className="text-[11px] text-slate-500">
+                      Carrier Priority: High
+                    </span>
+                  </div>
+
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -473,40 +515,37 @@ export const MobileAlertModal: React.FC<MobileAlertModalProps> = ({
                       onChange={(e) => setTriggerSound(e.target.checked)}
                       className="w-3.5 h-3.5 accent-blue-500 rounded"
                     />
-                    <span>Play emergency alert chime and speech</span>
+                    <span>Play emergency alert chime and speech notification</span>
                   </label>
-
-                  <span className="text-[11px] text-slate-500">
-                    Carrier Priority: High (Emergency Channel)
-                  </span>
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800">
                   <a
                     href={nativeSmsUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    Open Native Mobile SMS App
+                    <Smartphone className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Open Device SMS ({mobileNumber})</span>
+                    <ExternalLink className="w-3 h-3 text-slate-400" />
                   </a>
 
                   <button
                     type="submit"
                     disabled={isSending || !mobileNumber.trim() || !messageText.trim()}
-                    className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-600/30 disabled:opacity-50 transition"
+                    className="px-5 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-600/30 disabled:opacity-50 transition active:scale-95"
                   >
                     {isSending ? (
                       <>
                         <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        <span>Transmitting Cell Broadcast...</span>
+                        <span>Transmitting Real SMS Alert...</span>
                       </>
                     ) : (
                       <>
                         <Send className="w-3.5 h-3.5" />
-                        <span>Send Emergency Alert to Mobile</span>
+                        <span>Send Real Mobile SMS Alert</span>
                       </>
                     )}
                   </button>

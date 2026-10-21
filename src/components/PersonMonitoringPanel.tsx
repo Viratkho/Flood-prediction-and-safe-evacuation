@@ -422,6 +422,13 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
                       >
                         {healthStatus.text}
                       </span>
+
+                      {person.isUserRegistered && (
+                        <span className="px-1.5 py-0.2 rounded border border-amber-500/40 bg-amber-500/20 text-amber-300 font-bold text-[10px] flex items-center gap-1 font-mono">
+                          <MapPin className="w-3 h-3 text-[#ff7700]" />
+                          PINNED CITIZEN
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -516,6 +523,19 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
                     >
                       <Crosshair className="w-4 h-4" />
                     </button>
+
+                    {onOpenSmsModal && person.contactNumber && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenSmsModal(person);
+                        }}
+                        className="p-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 transition"
+                        title={`Send Real Emergency SMS to ${person.contactNumber}`}
+                      >
+                        <Smartphone className="w-4 h-4" />
+                      </button>
+                    )}
 
                     <ChevronRight className="w-4 h-4 text-slate-500" />
                   </div>

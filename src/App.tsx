@@ -84,8 +84,28 @@ export default function App() {
   const [segments, setSegments] = useState<RoadSegment[]>(INITIAL_ROAD_SEGMENTS);
   const [reliefCentres] = useState<ReliefCentre[]>(INITIAL_RELIEF_CENTRES);
 
-  // Health-Aware People & Incidents State
-  const [people, setPeople] = useState<RegisteredPerson[]>(INITIAL_REGISTERED_PEOPLE);
+  // Health-Aware People & Incidents State (Persists across reloads)
+  const [people, setPeople] = useState<RegisteredPerson[]>(() => {
+    try {
+      const stored = localStorage.getItem('floodguard_user_people');
+      if (stored) {
+        const localList: RegisteredPerson[] = JSON.parse(stored);
+        if (Array.isArray(localList) && localList.length > 0) {
+          const map = new Map(localList.map((p) => [p.personId, p]));
+          const combined = [...localList];
+          for (const initP of INITIAL_REGISTERED_PEOPLE) {
+            if (!map.has(initP.personId)) {
+              combined.push(initP);
+            }
+          }
+          return combined;
+        }
+      }
+    } catch (e) {
+      console.warn('LocalStorage people initialization error:', e);
+    }
+    return INITIAL_REGISTERED_PEOPLE;
+  });
   const [incidents, setIncidents] = useState<IncidentRecord[]>(INITIAL_INCIDENTS);
   const [experimentLogs, setExperimentLogs] = useState<ExperimentLog[]>([]);
   const [thresholds, setThresholds] = useState<HealthThresholds>(DEFAULT_HEALTH_THRESHOLDS);
@@ -526,7 +546,15 @@ export default function App() {
   };
 
   const handlePersonRegistered = (newPerson: RegisteredPerson, autoShowOnMap: boolean = true) => {
-    setPeople((prev) => [newPerson, ...prev.filter((p) => p.personId !== newPerson.personId)]);
+    setPeople((prev) => {
+      const updated = [newPerson, ...prev.filter((p) => p.personId !== newPerson.personId)];
+      try {
+        localStorage.setItem('floodguard_user_people', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('LocalStorage save error:', err);
+      }
+      return updated;
+    });
     setSelectedAlertPerson(newPerson);
     setActiveAdvisePerson(newPerson);
     setSelectedFocusLocation([newPerson.lat, newPerson.lng]);
@@ -761,6 +789,7 @@ export default function App() {
             selectedFocusLocation={selectedFocusLocation}
             focusedPersonId={focusedPersonId}
             onNavigateToPersonMonitoring={() => setActiveTab('person-monitoring')}
+            onOpenSmsModal={handleOpenSmsModal}
           />
         )}
 
@@ -785,8 +814,8 @@ export default function App() {
           <div className="w-full h-full p-4 sm:p-6 overflow-y-auto">
             <PersonIntakeForm
               currentGps={userLocation}
-              onPersonRegistered={(person) => {
-                handlePersonRegistered(person, true);
+              onPersonRegistered={(person, showOnMap = true) => {
+                handlePersonRegistered(person, showOnMap);
               }}
               onOpenSmsModal={handleOpenSmsModal}
             />
@@ -841,9 +870,11 @@ export default function App() {
           <div className="w-full max-w-4xl my-auto">
             <PersonIntakeForm
               currentGps={userLocation}
-              onPersonRegistered={(person) => {
-                handlePersonRegistered(person, true);
-                setIsIntakeModalOpen(false);
+              onPersonRegistered={(person, showOnMap = true) => {
+                handlePersonRegistered(person, showOnMap);
+                if (showOnMap) {
+                  setIsIntakeModalOpen(false);
+                }
               }}
               onClose={() => setIsIntakeModalOpen(false)}
               onOpenSmsModal={handleOpenSmsModal}

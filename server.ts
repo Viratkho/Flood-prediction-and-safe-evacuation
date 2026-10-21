@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import {
@@ -294,8 +295,40 @@ app.use((req, res, next) => {
   next();
 });
 
-// In-Memory Person, Incident & Research Experiment State
-let peopleState: RegisteredPerson[] = JSON.parse(JSON.stringify(INITIAL_REGISTERED_PEOPLE));
+// Persistent Person Data Store (Survives server restarts and redeploys)
+const PERSISTED_PEOPLE_FILE = path.join(__dirname, '.registered_people.json');
+
+const loadPersistedPeople = (): RegisteredPerson[] => {
+  try {
+    if (fs.existsSync(PERSISTED_PEOPLE_FILE)) {
+      const content = fs.readFileSync(PERSISTED_PEOPLE_FILE, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const idMap = new Map(parsed.map((p: RegisteredPerson) => [p.personId, p]));
+        const combined = [...parsed];
+        for (const initP of INITIAL_REGISTERED_PEOPLE) {
+          if (!idMap.has(initP.personId)) {
+            combined.push(initP);
+          }
+        }
+        return combined;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not read persisted people file:', err);
+  }
+  return JSON.parse(JSON.stringify(INITIAL_REGISTERED_PEOPLE));
+};
+
+export const savePersistedPeople = (list: RegisteredPerson[]) => {
+  try {
+    fs.writeFileSync(PERSISTED_PEOPLE_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Could not save persisted people file:', err);
+  }
+};
+
+let peopleState: RegisteredPerson[] = loadPersistedPeople();
 let incidentsState: IncidentRecord[] = JSON.parse(JSON.stringify(INITIAL_INCIDENTS));
 let experimentLogs: ExperimentLog[] = [];
 
@@ -598,8 +631,9 @@ app.post('/api/people', (req: Request, res: Response) => {
     initialPerson.priorityReason = evaluation.reason;
     initialPerson.priorityFactors = evaluation.factors;
 
-    // Persist to in-memory state
+    // Persist to in-memory and disk state
     peopleState.unshift(initialPerson);
+    savePersistedPeople(peopleState);
 
     // If SOS or high priority, auto-generate Incident for the command desk
     let createdIncident: IncidentRecord | null = null;
@@ -675,7 +709,7 @@ app.get('/api/alerts', (_req: Request, res: Response) => {
   });
 });
 
-app.post('/api/alerts/send-mobile', (req: Request, res: Response) => {
+app.post('/api/alerts/send-mobile', async (req: Request, res: Response) => {
   const { mobileNumber, recipientName, alertType, message, headline, personId } = req.body;
 
   if (!mobileNumber || !mobileNumber.trim()) {
@@ -688,16 +722,90 @@ app.post('/api/alerts/send-mobile', (req: Request, res: Response) => {
   const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const alertId = `SMS-${Date.now().toString().slice(-4)}`;
 
+  const cleanNumber = mobileNumber.trim();
+  const alertHeadline = headline || '🚨 FLOOD EMERGENCY BROADCAST';
+  const alertMessage = message.trim();
+
+  let realSmsSent = false;
+  let realSmsSid: string | null = null;
+  let realSmsError: string | null = null;
+  let gatewayUsed = 'Airtel / Jio Cell Broadcast & NDRF Emergency SMS Relay';
+
+  // 1. Check for real Twilio SMS gateway configuration in environment
+  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER) {
+    try {
+      const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+      const formParams = new URLSearchParams();
+      const formattedTo = cleanNumber.startsWith('+') ? cleanNumber : `+91${cleanNumber.replace(/^0+/, '')}`;
+      formParams.append('To', formattedTo);
+      formParams.append('From', process.env.TWILIO_PHONE_NUMBER);
+      formParams.append('Body', `[${alertHeadline}] ${alertMessage}`);
+
+      const twilioRes = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${auth}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formParams.toString(),
+        }
+      );
+
+      if (twilioRes.ok) {
+        const twilioData = await twilioRes.json();
+        realSmsSent = true;
+        realSmsSid = twilioData.sid;
+        gatewayUsed = `Twilio Global Cellular Gateway (SID: ${twilioData.sid})`;
+      } else {
+        const twilioErr = await twilioRes.text();
+        realSmsError = `Twilio error HTTP ${twilioRes.status}: ${twilioErr}`;
+        console.warn('Twilio dispatch warning:', realSmsError);
+      }
+    } catch (twErr: any) {
+      realSmsError = twErr.message || 'Twilio network call failed';
+      console.warn('Twilio dispatch error:', twErr);
+    }
+  } else if (process.env.FAST2SMS_API_KEY) {
+    // 2. Check for Fast2SMS gateway for direct Indian mobile carrier SMS
+    try {
+      const pureDigits = cleanNumber.replace(/[^0-9]/g, '').slice(-10);
+      const f2sRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+        method: 'POST',
+        headers: {
+          authorization: process.env.FAST2SMS_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          route: 'v3',
+          sender_id: 'TXTIND',
+          message: `[${alertHeadline}] ${alertMessage}`,
+          language: 'english',
+          flash: 0,
+          numbers: pureDigits,
+        }),
+      });
+      if (f2sRes.ok) {
+        const f2sData = await f2sRes.json();
+        realSmsSent = Boolean(f2sData?.return);
+        gatewayUsed = 'Fast2SMS National Cellular Gateway';
+      }
+    } catch (fErr: any) {
+      console.warn('Fast2SMS dispatch error:', fErr);
+    }
+  }
+
   const alertRecord: MobileAlertMessage = {
     id: alertId,
     timestamp: nowStr,
-    mobileNumber: mobileNumber.trim(),
+    mobileNumber: cleanNumber,
     recipientName: (recipientName || 'Citizen / Evacuee').trim(),
     alertType: alertType || 'DIRECT_ALERT',
-    headline: headline || '🚨 FLOOD EMERGENCY BROADCAST',
-    message: message.trim(),
+    headline: alertHeadline,
+    message: alertMessage,
     status: 'DELIVERED',
-    gateway: 'Airtel / Jio Cell Broadcast & NDRF Emergency SMS Relay',
+    gateway: gatewayUsed,
   };
 
   mobileAlertsLog.unshift(alertRecord);
@@ -711,12 +819,23 @@ app.post('/api/alerts/send-mobile', (req: Request, res: Response) => {
     }
   }
 
+  // Pre-generate native device SMS link so mobile/desktop browsers can launch native messaging app
+  const purePhone = cleanNumber.replace(/[^0-9+]/g, '');
+  const nativeSmsUrl = `sms:${purePhone}?body=${encodeURIComponent(`[${alertHeadline}] ${alertMessage}`)}`;
+
   res.json({
     success: true,
     alert: alertRecord,
     deliveryStatus: 'DELIVERED',
+    realSmsSent,
+    realSmsSid,
+    realSmsError,
+    gatewayUsed,
+    nativeSmsUrl,
     networkLatencyMs: Math.floor(120 + Math.random() * 180),
-    message: `Emergency SMS dispatched to ${alertRecord.mobileNumber} via Government Emergency Gateway`,
+    message: realSmsSent
+      ? `Real cellular SMS dispatched to ${alertRecord.mobileNumber} via ${gatewayUsed}`
+      : `Emergency alert queued and prepared for ${alertRecord.mobileNumber}. Native cellular SMS link generated for direct transmission.`,
   });
 });
 

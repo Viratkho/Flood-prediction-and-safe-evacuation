@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import L from 'leaflet';
 import {
   RegisteredPerson,
   CitizenRegistrationInput,
@@ -28,7 +29,7 @@ import {
 
 interface PersonIntakeFormProps {
   currentGps: [number, number];
-  onPersonRegistered: (person: RegisteredPerson) => void;
+  onPersonRegistered: (person: RegisteredPerson, autoShowOnMap?: boolean) => void;
   onClose?: () => void;
   onOpenSmsModal?: (person: RegisteredPerson) => void;
 }
@@ -65,8 +66,8 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [addressLandmark, setAddressLandmark] = useState('');
-  const [lat, setLat] = useState<number>(currentGps[0]);
-  const [lng, setLng] = useState<number>(currentGps[1]);
+  const [lat, setLat] = useState<number>(currentGps?.[0] || 13.1120);
+  const [lng, setLng] = useState<number>(currentGps?.[1] || 80.1030);
   const [currentWaterDepthCm, setCurrentWaterDepthCm] = useState<number>(15);
   const [assistanceType, setAssistanceType] = useState<
     'RESCUE_BOAT' | 'MEDICAL_EVAC' | 'SHELTER_ROUTING' | 'SUPPLIES' | 'GENERAL_ADVICE'
@@ -79,6 +80,85 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
   const [initialSpo2, setInitialSpo2] = useState<number>(98);
   const [sosActive, setSosActive] = useState(false);
   const [sendWelcomeSms, setSendWelcomeSms] = useState(true);
+  const [autoShowOnMap, setAutoShowOnMap] = useState(true);
+
+  const miniMapContainerRef = useRef<HTMLDivElement>(null);
+  const miniMapInstanceRef = useRef<L.Map | null>(null);
+  const miniMarkerRef = useRef<L.Marker | null>(null);
+
+  // Initialize interactive mini-map preview for GPS pin placement
+  useEffect(() => {
+    if (!miniMapContainerRef.current || miniMapInstanceRef.current) return;
+
+    const map = L.map(miniMapContainerRef.current, {
+      center: [lat, lng],
+      zoom: 14,
+      zoomControl: false,
+    });
+
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap',
+    }).addTo(map);
+
+    const pinIcon = L.divIcon({
+      className: 'intake-map-pin',
+      html: `
+        <div class="relative flex flex-col items-center cursor-grab active:cursor-grabbing">
+          <div class="w-8 h-8 rounded-full bg-[#ff7700] border-2 border-white shadow-2xl flex items-center justify-center text-white text-xs font-bold animate-pulse">
+            📍
+          </div>
+          <div class="w-2.5 h-2.5 rotate-45 -mt-1 bg-[#ff7700] border-r border-b border-white"></div>
+        </div>
+      `,
+      iconSize: [32, 36],
+      iconAnchor: [16, 36],
+    });
+
+    const marker = L.marker([lat, lng], {
+      icon: pinIcon,
+      draggable: true,
+    }).addTo(map);
+
+    marker.on('dragend', () => {
+      const pos = marker.getLatLng();
+      setLat(Number(pos.lat.toFixed(4)));
+      setLng(Number(pos.lng.toFixed(4)));
+    });
+
+    map.on('click', (e) => {
+      marker.setLatLng(e.latlng);
+      setLat(Number(e.latlng.lat.toFixed(4)));
+      setLng(Number(e.latlng.lng.toFixed(4)));
+    });
+
+    miniMapInstanceRef.current = map;
+    miniMarkerRef.current = marker;
+
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      map.remove();
+      miniMapInstanceRef.current = null;
+      miniMarkerRef.current = null;
+    };
+  }, []);
+
+  // Sync mini-map whenever lat or lng updates from buttons or inputs
+  useEffect(() => {
+    if (miniMarkerRef.current && miniMapInstanceRef.current) {
+      const currentPos = miniMarkerRef.current.getLatLng();
+      if (Math.abs(currentPos.lat - lat) > 0.0001 || Math.abs(currentPos.lng - lng) > 0.0001) {
+        miniMarkerRef.current.setLatLng([lat, lng]);
+        miniMapInstanceRef.current.panTo([lat, lng], { animate: true });
+      }
+    }
+  }, [lat, lng]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registeredSuccess, setRegisteredSuccess] = useState<RegisteredPerson | null>(null);
@@ -217,7 +297,7 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
       }
 
       setRegisteredSuccess(newPerson);
-      onPersonRegistered(newPerson);
+      onPersonRegistered(newPerson, autoShowOnMap);
 
       // If user requested welcome SMS, also send via gateway endpoint
       if (sendWelcomeSms && contactNumber) {
@@ -317,6 +397,18 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                onPersonRegistered(registeredSuccess, true);
+                if (onClose) onClose();
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-[#ff7700] to-amber-500 hover:from-[#ff8811] hover:to-amber-400 text-white font-bold rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-[#ff7700]/30 transition"
+            >
+              <Compass className="w-4 h-4" />
+              <span>View {registeredSuccess.name} on Live Tactical Map ({registeredSuccess.lat.toFixed(4)}, {registeredSuccess.lng.toFixed(4)}) &rarr;</span>
+            </button>
+
             {onOpenSmsModal && (
               <button
                 type="button"
@@ -350,9 +442,9 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-[#ff7700] hover:bg-[#ff8811] text-white font-semibold rounded-xl text-sm transition shadow-lg"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-sm transition"
               >
-                Done / Return to Map
+                Close
               </button>
             )}
           </div>
@@ -575,6 +667,26 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
                 />
               </div>
             </div>
+
+            {/* Interactive GPS Pin Mini-Map Preview */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-300 font-semibold flex items-center gap-1.5">
+                  <Compass className="w-3.5 h-3.5 text-[#ff7700]" />
+                  Interactive GPS Pin Placement (Click map or drag pin to position person)
+                </span>
+                <span className="font-mono text-[#ff7700] bg-[#ff7700]/10 px-2 py-0.5 rounded border border-[#ff7700]/30 text-[11px]">
+                  {lat.toFixed(4)}, {lng.toFixed(4)}
+                </span>
+              </div>
+              <div
+                ref={miniMapContainerRef}
+                className="w-full h-44 rounded-xl border border-slate-700 overflow-hidden relative shadow-inner z-0"
+              />
+              <p className="text-[11px] text-slate-400">
+                This exact GPS coordinate will be attached to the citizen's wearable record and plotted onto the Live Command Map immediately when submitted.
+              </p>
+            </div>
           </div>
 
           {/* Section 3: Health Vitals & Medical Vulnerabilities */}
@@ -766,34 +878,51 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
           </div>
 
           {/* Submit Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
-            {onClose && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition"
-              >
-                Cancel
-              </button>
-            )}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-800">
+            <div className="flex items-center">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={autoShowOnMap}
+                  onChange={(e) => setAutoShowOnMap(e.target.checked)}
+                  className="w-4 h-4 accent-[#ff7700] rounded"
+                />
+                <span className="flex items-center gap-1.5 font-semibold text-[#ff7700]">
+                  <Compass className="w-3.5 h-3.5" />
+                  Auto-switch to Live Tactical Map and center on GPS coordinate upon submit
+                </span>
+              </label>
+            </div>
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-6 py-2.5 bg-gradient-to-r from-[#ff7700] to-amber-500 hover:from-[#ff8811] hover:to-amber-400 text-white font-bold rounded-xl text-sm flex items-center gap-2 shadow-xl shadow-[#ff7700]/20 disabled:opacity-50 transition"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Saving Intake & Evaluating Priority...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  <span>Submit & Save Person Intake</span>
-                </>
+            <div className="flex items-center gap-3 ml-auto">
+              {onClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition"
+                >
+                  Cancel
+                </button>
               )}
-            </button>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 py-2.5 bg-gradient-to-r from-[#ff7700] to-amber-500 hover:from-[#ff8811] hover:to-amber-400 text-white font-bold rounded-xl text-sm flex items-center gap-2 shadow-xl shadow-[#ff7700]/25 disabled:opacity-50 transition active:scale-95"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Saving & Plotting GPS on Map...</span>
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="w-4 h-4 text-white" />
+                    <span>Submit & Show on Map</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       )}
