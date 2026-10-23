@@ -872,6 +872,12 @@ app.disable("x-powered-by");
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+app.use((req, res, next) => {
+  if (!req.url.startsWith("/api") && (req.url.startsWith("/weather") || req.url.startsWith("/people") || req.url.startsWith("/incidents") || req.url.startsWith("/dam") || req.url.startsWith("/health") || req.url.startsWith("/alerts") || req.url.startsWith("/ai") || req.url.startsWith("/security") || req.url.startsWith("/simulation") || req.url.startsWith("/research"))) {
+    req.url = "/api" + req.url;
+  }
+  next();
+});
 var totalRequestsInspected = 0;
 var totalThreatsBlocked = 0;
 var quarantinedIPs = /* @__PURE__ */ new Map();
@@ -2773,7 +2779,7 @@ app.get("/api/weather/search", async (req, res) => {
 });
 app.get("/api/weather/news/local", async (req, res) => {
   try {
-    const query = (req.query.query || "Chennai").trim();
+    const query = (req.query.query || req.query.location || req.query.city || "Chennai").trim();
     const region = (req.query.region || "Tamil Nadu").trim();
     const cacheKey = `${query.toLowerCase()}_${region.toLowerCase()}`;
     const now2 = Date.now();

@@ -151,6 +151,25 @@ app.use(express.json({ limit: '1mb' }));
 
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
+// Normalize routes when deployed behind serverless rewrites (e.g. Vercel /api prefix strip)
+app.use((req, res, next) => {
+  if (!req.url.startsWith('/api') && (
+    req.url.startsWith('/weather') ||
+    req.url.startsWith('/people') ||
+    req.url.startsWith('/incidents') ||
+    req.url.startsWith('/dam') ||
+    req.url.startsWith('/health') ||
+    req.url.startsWith('/alerts') ||
+    req.url.startsWith('/ai') ||
+    req.url.startsWith('/security') ||
+    req.url.startsWith('/simulation') ||
+    req.url.startsWith('/research')
+  )) {
+    req.url = '/api' + req.url;
+  }
+  next();
+});
+
 
 
 
@@ -5598,7 +5617,7 @@ app.get('/api/weather/search', async (req: Request, res: Response) => {
 // 3. Local Weather News Endpoint (Public RSS Feeds)
 app.get('/api/weather/news/local', async (req: Request, res: Response) => {
   try {
-    const query = (req.query.query as string || 'Chennai').trim();
+    const query = (req.query.query as string || req.query.location as string || req.query.city as string || 'Chennai').trim();
     const region = (req.query.region as string || 'Tamil Nadu').trim();
     const cacheKey = `${query.toLowerCase()}_${region.toLowerCase()}`;
     const now = Date.now();
