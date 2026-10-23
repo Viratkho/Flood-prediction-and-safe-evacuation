@@ -8,6 +8,7 @@ import { IncidentWorkspace } from './components/IncidentWorkspace';
 import { ResearchSimulationMode } from './components/ResearchSimulationMode';
 import { PersonIntakeForm } from './components/PersonIntakeForm';
 import { WeatherNewsHub } from './components/WeatherNewsHub';
+import { SmartwatchGlanceHub } from './components/SmartwatchGlanceHub';
 import { MobileAlertModal } from './components/MobileAlertModal';
 import { FirewallSecurityModal } from './components/FirewallSecurityModal';
 import { SystemTestRunnerModal } from './components/SystemTestRunnerModal';
@@ -62,6 +63,10 @@ import {
   Users,
   Wifi,
   WifiOff,
+  Menu,
+  Watch,
+  Layers,
+  X,
 } from 'lucide-react';
 
 type TabView =
@@ -84,6 +89,25 @@ export default function App() {
   const [selectedAlertPerson, setSelectedAlertPerson] = useState<RegisteredPerson | null>(null);
   const [activeAdvisePerson, setActiveAdvisePerson] = useState<RegisteredPerson | null>(null);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [windowWidth, setWindowWidth] = useState<number>(
+    typeof window !== 'undefined' ? window.innerWidth : 1280
+  );
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isWatchGlanceMode, setIsWatchGlanceMode] = useState(false);
+
+  // Monitor responsive viewport & auto-engage watch mode on <= 320px
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth;
+      setWindowWidth(w);
+      if (w <= 320) {
+        setIsWatchGlanceMode(true);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Basin and Sensor State
   const [sensors, setSensors] = useState<RoadSensor[]>(INITIAL_ROAD_SENSORS);
@@ -654,9 +678,62 @@ export default function App() {
   const criticalCount = people.filter((p) => p.rescuePriority === 'P0' || p.rescuePriority === 'P1').length;
 
   return (
-    <div className="flex flex-col w-screen h-screen overflow-hidden bg-slate-950 font-sans selection:bg-[#ff7700] selection:text-white">
+    <div className="flex flex-col w-full min-h-screen h-[100dvh] max-h-[100dvh] overflow-hidden bg-slate-950 font-sans selection:bg-[#ff7700] selection:text-white relative">
       {/* Universal Top Master Navigation & Telemetry Banner */}
-      <header className="z-30 bg-slate-950 border-b border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-white">
+      <header className="z-30 bg-slate-950 border-b border-slate-800 px-3 sm:px-4 py-2 text-white shrink-0">
+        {/* Mobile Top Bar (Screens < 768px) */}
+        <div className="flex md:hidden items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-[#ff7700] flex items-center justify-center text-white shadow shrink-0">
+              <Shield className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <span className="font-extrabold text-xs tracking-wide text-white">
+                FLOODGUARD <span className="text-[#ff7700]">2.1</span>
+              </span>
+            </div>
+
+            {/* Mobile Active SOS Badge */}
+            {activeSosCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded bg-red-600 text-white font-mono font-bold text-[10px] animate-pulse shrink-0">
+                {activeSosCount} SOS
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Quick Watch View Toggle Button */}
+            <button
+              onClick={() => setIsWatchGlanceMode(!isWatchGlanceMode)}
+              className="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-sky-400 text-[11px] font-mono flex items-center gap-1"
+              title="Toggle Smartwatch Ultra-Compact View"
+            >
+              <Watch className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">Watch</span>
+            </button>
+
+            {/* Quick Live Testing Trigger */}
+            <button
+              onClick={() => setIsTestRunnerOpen(true)}
+              className="p-1.5 rounded-lg bg-indigo-600/30 text-indigo-300 border border-indigo-500/40"
+              title="Live Testing Console"
+            >
+              <Activity className="w-3.5 h-3.5 animate-pulse" />
+            </button>
+
+            {/* Mobile Hamburger Drawer Toggle */}
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition"
+              title="Toggle Navigation Menu"
+            >
+              {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop & Tablet Navigation (Screens >= 768px) */}
+        <div className="hidden md:flex flex-wrap items-center justify-between gap-3">
         {/* Brand & Status */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -850,6 +927,16 @@ export default function App() {
             <span className="hidden md:inline">Offline Map Pack</span>
           </button>
 
+          {/* Smartwatch / Ultra-Small Display Mode Switcher */}
+          <button
+            onClick={() => setIsWatchGlanceMode(true)}
+            className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-sky-300 text-xs font-semibold flex items-center gap-1.5 shadow transition"
+            title="Preview Smartwatch / Wearable Ultra-Compact View (160–320px)"
+          >
+            <Watch className="w-3.5 h-3.5 text-sky-400" />
+            <span className="hidden xl:inline">Watch View</span>
+          </button>
+
           <button
             onClick={() => setIsAiAssistantOpen(true)}
             className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-[#ff7700] to-amber-500 hover:from-[#ff8811] hover:to-amber-400 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-[#ff7700]/20 transition active:scale-95"
@@ -859,10 +946,240 @@ export default function App() {
             <span>Aegis AI</span>
           </button>
         </div>
+        </div>
       </header>
+
+      {/* Mobile Drawer Menu Overlay (When Hamburger Opened on < 768px) */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden fixed inset-x-0 top-[52px] bottom-[56px] z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 p-4 overflow-y-auto space-y-4 animate-in slide-in-from-top-2">
+          {/* Section: Primary Views */}
+          <div className="space-y-1.5">
+            <div className="text-[10px] font-mono uppercase text-slate-400 tracking-wider">
+              Primary Dashboards & Views
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <button
+                onClick={() => {
+                  setActiveTab('command-center');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                  activeTab === 'command-center'
+                    ? 'bg-slate-800 text-white border-white'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`}
+              >
+                <Compass className="w-4 h-4 text-[#ff7700]" />
+                <span>Command Center</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('evacuation-app');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                  activeTab === 'evacuation-app'
+                    ? 'bg-[#ff7700] text-white border-white'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`}
+              >
+                <Navigation className="w-4 h-4" />
+                <span>Evacuation App</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('weather-news');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                  activeTab === 'weather-news'
+                    ? 'bg-sky-700 text-white border-white'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`}
+              >
+                <CloudSun className="w-4 h-4 text-sky-400" />
+                <span>Weather & News</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('person-monitoring');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                  activeTab === 'person-monitoring'
+                    ? 'bg-slate-800 text-white border-white'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`}
+              >
+                <Users className="w-4 h-4 text-sky-400" />
+                <span>Monitoring ({people.length})</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('person-intake');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                  activeTab === 'person-intake'
+                    ? 'bg-[#ff7700] text-white border-white'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`}
+              >
+                <Plus className="w-4 h-4 text-[#ff7700]" />
+                <span>Register Intake</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('incident-workspace');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                  activeTab === 'incident-workspace'
+                    ? 'bg-slate-800 text-white border-white'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`}
+              >
+                <FileText className="w-4 h-4 text-amber-400" />
+                <span>Incidents</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('research-simulation');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`col-span-2 p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                  activeTab === 'research-simulation'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`}
+              >
+                <FlaskConical className="w-4 h-4 text-amber-400" />
+                <span>Research Mode & Simulation Scenarios</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Section: Tactical Actions & Modals */}
+          <div className="space-y-1.5 pt-2 border-t border-slate-800">
+            <div className="text-[10px] font-mono uppercase text-slate-400 tracking-wider">
+              Emergency Services & Modals
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <button
+                onClick={() => {
+                  handleOpenSmsModal(people[0]);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold flex items-center gap-2 shadow"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>Mobile SMS Alert</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsAiAssistantOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="p-2.5 rounded-xl bg-gradient-to-r from-[#ff7700] to-amber-500 text-white font-bold flex items-center gap-2 shadow"
+              >
+                <Bot className="w-4 h-4" />
+                <span>Aegis AI Advisor</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsTestRunnerOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="p-2.5 rounded-xl bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-bold flex items-center gap-2"
+              >
+                <Activity className="w-4 h-4" />
+                <span>Live Testing (27)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsFirewallModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="p-2.5 rounded-xl bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 font-bold flex items-center gap-2"
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Firewall WAF</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsOfflineManagerOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="col-span-2 p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 font-bold flex items-center justify-between"
+              >
+                <span className="flex items-center gap-2">
+                  <Download className="w-4 h-4 text-sky-400" />
+                  <span>Offline Map Packages</span>
+                </span>
+                <span className="text-[10px] font-mono text-slate-500">
+                  {isOfflineMode ? 'OFFLINE' : 'ONLINE'}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Smartwatch Switcher in Drawer */}
+          <div className="pt-2 border-t border-slate-800">
+            <button
+              onClick={() => {
+                setIsWatchGlanceMode(true);
+                setIsMobileMenuOpen(false);
+              }}
+              className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-sky-300 font-bold text-xs flex items-center justify-center gap-2 transition"
+            >
+              <Watch className="w-4 h-4 text-sky-400" />
+              <span>Switch to Smartwatch Glance Mode (160–320px)</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main View Area */}
       <main className="flex-1 relative w-full h-full overflow-hidden">
+        {/* Dedicated Smartwatch Glance Mode (160–320px ultra-compact) */}
+        {isWatchGlanceMode ? (
+          <SmartwatchGlanceHub
+            damTelemetry={damTelemetry}
+            people={people}
+            reliefCentres={reliefCentres}
+            userLocation={userLocation}
+            onOpenEvacuation={() => {
+              setIsWatchGlanceMode(false);
+              setActiveTab('evacuation-app');
+            }}
+            onOpenWeatherNews={() => {
+              setIsWatchGlanceMode(false);
+              setActiveTab('weather-news');
+            }}
+            onOpenPersonMonitoring={() => {
+              setIsWatchGlanceMode(false);
+              setActiveTab('person-monitoring');
+            }}
+            onOpenCommandCenter={() => {
+              setIsWatchGlanceMode(false);
+              setActiveTab('command-center');
+            }}
+            onSwitchToFullView={() => setIsWatchGlanceMode(false)}
+          />
+        ) : (
+          <>
         {activeTab === 'command-center' && (
           <RescueCommandCenter
             sensors={sensors}
@@ -956,7 +1273,79 @@ export default function App() {
             onExportLogs={handleExportResearchLogs}
           />
         )}
+          </>
+        )}
       </main>
+
+      {/* Fixed Bottom Navigation Dock for Thumb Usability (Mobile Phones < 768px, hidden in Watch Mode) */}
+      {!isWatchGlanceMode && (
+        <nav className="md:hidden z-30 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 px-2 py-1.5 flex items-center justify-around text-slate-400 shrink-0 safe-area-inset-bottom">
+          <button
+            onClick={() => {
+              setActiveTab('command-center');
+              setIsMobileMenuOpen(false);
+            }}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+              activeTab === 'command-center' ? 'text-[#ff7700] font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            <Compass className="w-4 h-4" />
+            <span className="text-[10px]">Command</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('evacuation-app');
+              setIsMobileMenuOpen(false);
+            }}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+              activeTab === 'evacuation-app' ? 'text-[#ff7700] font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            <Navigation className="w-4 h-4" />
+            <span className="text-[10px]">Evac</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('weather-news');
+              setIsMobileMenuOpen(false);
+            }}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+              activeTab === 'weather-news' ? 'text-sky-400 font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            <CloudSun className="w-4 h-4" />
+            <span className="text-[10px]">Weather</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('person-monitoring');
+              setIsMobileMenuOpen(false);
+            }}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition relative ${
+              activeTab === 'person-monitoring' ? 'text-sky-400 font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span className="text-[10px]">People</span>
+            {criticalCount > 0 && (
+              <span className="absolute top-0 right-1 w-2 h-2 rounded-full bg-[#ff7700]"></span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+              isMobileMenuOpen ? 'text-[#ff7700] font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            <Menu className="w-4 h-4" />
+            <span className="text-[10px]">Menu</span>
+          </button>
+        </nav>
+      )}
 
       {/* Citizen Registration Intake Modal */}
       {isIntakeModalOpen && (

@@ -1,11 +1,38 @@
 @import "tailwindcss";
 
 @layer base {
+  html, body {
+    width: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
+  }
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    touch-action: manipulation;
   }
   code, pre, .font-mono {
     font-family: 'JetBrains Mono', monospace;
+  }
+  button, a {
+    touch-action: manipulation;
+  }
+}
+
+/* Safe Area Insets for Mobile Notches & Round Smartwatch Displays */
+.safe-area-inset-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Reduced Motion Respect */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -84,4 +111,3 @@
 .animate-radar-ping {
   animation: radar-beacon-pulse 1.8s cubic-bezier(0, 0.2, 0.8, 1) infinite;
 }
-

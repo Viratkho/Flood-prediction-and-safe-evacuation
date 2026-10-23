@@ -141,7 +141,7 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
   return (
     <div className="w-full h-full flex flex-col lg:flex-row overflow-hidden bg-slate-950 text-slate-100">
       {/* Left List Column */}
-      <div className="flex-1 flex flex-col border-r border-slate-800 overflow-hidden">
+      <div className={`flex-1 flex flex-col border-r border-slate-800 overflow-hidden ${selectedPerson ? "hidden lg:flex" : "flex"}`}>
         {/* Search & Filter Header Bar */}
         <div className="p-4 bg-slate-900 border-b border-slate-800 space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -447,7 +447,7 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
                   </div>
 
                   {/* Middle Column: Physiological Readings */}
-                  <div className="flex items-center gap-4 text-xs font-mono bg-slate-950/80 p-2 rounded-lg border border-slate-800 flex-shrink-0">
+                  <div className="grid grid-cols-3 gap-2 text-xs font-mono bg-slate-950/80 p-2 rounded-lg border border-slate-800 w-full sm:w-auto shrink-0 text-center sm:text-left">
                     <div>
                       <div className="text-[10px] text-slate-400 flex items-center gap-1">
                         <Heart className="w-3 h-3 text-rose-400" />
@@ -464,7 +464,7 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
                       </div>
                     </div>
 
-                    <div className="w-px h-6 bg-slate-800" />
+                    
 
                     <div>
                       <div className="text-[10px] text-slate-400 flex items-center gap-1">
@@ -488,7 +488,7 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
                       </div>
                     </div>
 
-                    <div className="w-px h-6 bg-slate-800" />
+                    
 
                     <div>
                       <div className="text-[10px] text-slate-400">FLOOD DEPTH</div>
@@ -573,7 +573,15 @@ export const PersonMonitoringPanel: React.FC<PersonMonitoringPanelProps> = ({
 
       {/* Right Column: Person Detail Panel / History / Vitals Charts */}
       {selectedPerson && (
-        <div className="w-full lg:w-[450px] bg-slate-900 border-l border-slate-800 flex flex-col overflow-y-auto shadow-2xl p-5 space-y-4">
+        <div className={`w-full lg:w-[450px] bg-slate-900 border-l border-slate-800 flex flex-col overflow-y-auto shadow-2xl p-4 sm:p-5 space-y-4 ${selectedPerson ? "flex" : "hidden lg:flex"}`}>
+          {/* Mobile Back Button */}
+          <button
+            type="button"
+            onClick={() => setSelectedPerson(null)}
+            className="lg:hidden px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 font-bold text-xs flex items-center gap-1.5 w-fit border border-slate-700 shadow transition"
+          >
+            <span>&larr; Back to Persons List</span>
+          </button>
           {/* Header */}
           <div className="flex items-start justify-between border-b border-slate-800 pb-3">
             <div>

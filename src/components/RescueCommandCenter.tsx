@@ -16,6 +16,8 @@ import {
   AlertTriangle,
   ArrowDownRight,
   BatteryCharging,
+  ChevronDown,
+  ChevronUp,
   CloudRain,
   Compass,
   Crosshair,
@@ -91,6 +93,7 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
   const [selectedSensor, setSelectedSensor] = useState<RoadSensor | null>(null);
   const [selectedPersonForInspection, setSelectedPersonForInspection] = useState<RegisteredPerson | null>(null);
   const [activeTileTheme, setActiveTileTheme] = useState<'tactical-dark' | 'osm-standard'>('tactical-dark');
+  const [isDamCardCollapsed, setIsDamCardCollapsed] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
 
   // Initialize Map
   useEffect(() => {
@@ -645,7 +648,7 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
 
         {/* Floating Focused Citizen HUD Banner */}
         {selectedPersonForInspection && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-950/95 border border-[#ff7700] rounded-xl px-4 py-2.5 shadow-2xl backdrop-blur-md flex items-center gap-3 text-white max-w-xl animate-in fade-in slide-in-from-top-2">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-950/95 border border-[#ff7700] rounded-xl px-4 py-2.5 shadow-2xl backdrop-blur-md flex items-center gap-3 text-white w-[calc(100vw-2rem)] max-w-xl animate-in fade-in slide-in-from-top-2">
             <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-[#ff7700] to-amber-500 flex items-center justify-center text-white shrink-0 shadow-lg text-lg">
               📍
             </div>
@@ -709,28 +712,39 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
         )}
 
         {/* Floating Dam Hydrological Simulation Card */}
-        <div className="absolute top-4 left-4 z-20 w-84 md:w-96 bg-slate-900/95 backdrop-blur-md rounded-xl border border-slate-800 shadow-2xl overflow-hidden text-slate-100">
+        <div className="absolute top-4 left-4 z-20 w-[calc(100vw-2rem)] max-w-sm sm:w-84 md:w-96 bg-slate-900/95 backdrop-blur-md rounded-xl border border-slate-800 shadow-2xl overflow-hidden text-slate-100 transition-all">
           <div className="px-4 py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Waves className="w-5 h-5 text-[#38bdf8]" />
-              <div>
-                <div className="font-bold text-xs uppercase tracking-wider text-slate-300">Hydrological Telemetry</div>
-                <div className="text-sm font-semibold text-white truncate max-w-[210px]">{damTelemetry.damName}</div>
+            <div className="flex items-center gap-2 min-w-0">
+              <Waves className="w-5 h-5 text-[#38bdf8] shrink-0" />
+              <div className="min-w-0">
+                <div className="font-bold text-[10px] sm:text-xs uppercase tracking-wider text-slate-300">Hydrological Telemetry</div>
+                <div className="text-xs sm:text-sm font-semibold text-white truncate max-w-[150px] sm:max-w-[210px]">{damTelemetry.damName}</div>
               </div>
             </div>
 
-            <div className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wide border ${
-              damTelemetry.status === 'CRITICAL'
-                ? 'bg-red-500/20 text-red-400 border-red-500/40 animate-pulse'
-                : damTelemetry.status === 'WARNING'
-                ? 'bg-[#ff7700]/20 text-[#ff7700] border-[#ff7700]/40'
-                : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-            }`}>
-              {damTelemetry.status}
+            <div className="flex items-center gap-2 shrink-0">
+              <div className={`px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-mono font-bold tracking-wide border ${
+                damTelemetry.status === 'CRITICAL'
+                  ? 'bg-red-500/20 text-red-400 border-red-500/40 animate-pulse'
+                  : damTelemetry.status === 'WARNING'
+                  ? 'bg-[#ff7700]/20 text-[#ff7700] border-[#ff7700]/40'
+                  : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+              }`}>
+                {damTelemetry.status}
+              </div>
+              <button
+                onClick={() => setIsDamCardCollapsed(!isDamCardCollapsed)}
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 text-xs transition-colors"
+                title={isDamCardCollapsed ? "Expand Telemetry Panel" : "Collapse Telemetry Panel"}
+                aria-label={isDamCardCollapsed ? "Expand Dam Telemetry" : "Collapse Dam Telemetry"}
+              >
+                {isDamCardCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
-          <div className="p-4 space-y-3.5">
+          {!isDamCardCollapsed && (
+            <div className="p-4 space-y-3.5">
             {/* Reservoir Gauge & Crest Bar */}
             <div>
               <div className="flex justify-between items-baseline mb-1">
@@ -869,11 +883,12 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
               </div>
             </div>
           </div>
+          )}
         </div>
 
         {/* Selected Sensor Floating Inspector */}
         {selectedSensor && (
-          <div className="absolute bottom-6 left-4 z-20 w-80 bg-slate-900/95 backdrop-blur-md rounded-xl border border-slate-800 shadow-2xl p-4 text-white">
+          <div className="absolute bottom-6 left-4 z-20 w-[calc(100vw-2rem)] max-w-xs sm:w-80 bg-slate-900/95 backdrop-blur-md rounded-xl border border-slate-800 shadow-2xl p-4 text-white">
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-[10px] font-mono text-slate-400 uppercase">{selectedSensor.id}</span>
@@ -915,7 +930,7 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
 
         {/* Selected Person Floating Inspection Card */}
         {selectedPersonForInspection && (
-          <div className="absolute bottom-6 right-4 lg:right-96 z-20 w-84 bg-slate-900/95 backdrop-blur-md rounded-xl border border-slate-800 shadow-2xl p-4 text-white space-y-2.5">
+          <div className="absolute bottom-6 left-4 sm:left-auto right-4 lg:right-96 z-20 w-[calc(100vw-2rem)] max-w-xs sm:w-84 bg-slate-900/95 backdrop-blur-md rounded-xl border border-slate-800 shadow-2xl p-4 text-white space-y-2.5">
             <div className="flex justify-between items-start">
               <div>
                 <div className="flex items-center gap-1.5">

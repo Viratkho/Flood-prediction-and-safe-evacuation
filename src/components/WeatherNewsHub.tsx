@@ -412,7 +412,7 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation }) 
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  <h1 className="text-base sm:text-xl md:text-2xl font-black text-white tracking-tight">
                     Weather & Meteorological News Hub
                   </h1>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold font-mono">
@@ -721,7 +721,7 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation }) 
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
                       {/* Humidity */}
                       <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80">
                         <div className="text-[10px] text-slate-400 flex items-center gap-1 mb-1">
