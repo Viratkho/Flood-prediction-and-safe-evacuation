@@ -2503,6 +2503,513 @@ ${medicalSnippet}
 
 3. Keep FloodGuard voice navigation turned on for turn-by-turn safe routing.`;
 }
+var weatherCache = /* @__PURE__ */ new Map();
+var geocodingCache = /* @__PURE__ */ new Map();
+var localNewsCache = /* @__PURE__ */ new Map();
+var globalNewsCache = null;
+var WEATHER_CACHE_TTL_MS = 10 * 60 * 1e3;
+var GEOCODING_CACHE_TTL_MS = 60 * 60 * 1e3;
+var NEWS_CACHE_TTL_MS = 15 * 60 * 1e3;
+function getWmoWeatherInfo(code) {
+  switch (code) {
+    case 0:
+      return { condition: "Clear Sky", icon: "Sun" };
+    case 1:
+      return { condition: "Mainly Clear", icon: "SunDim" };
+    case 2:
+      return { condition: "Partly Cloudy", icon: "CloudSun" };
+    case 3:
+      return { condition: "Overcast", icon: "Cloud" };
+    case 45:
+    case 48:
+      return { condition: "Fog & Depositing Rime Fog", icon: "CloudFog" };
+    case 51:
+      return { condition: "Light Drizzle", icon: "CloudDrizzle" };
+    case 53:
+      return { condition: "Moderate Drizzle", icon: "CloudDrizzle" };
+    case 55:
+      return { condition: "Dense Drizzle", icon: "CloudDrizzle" };
+    case 56:
+    case 57:
+      return { condition: "Freezing Drizzle", icon: "CloudSnow" };
+    case 61:
+      return { condition: "Slight Rain", icon: "CloudRain" };
+    case 63:
+      return { condition: "Moderate Rain", icon: "CloudRain" };
+    case 65:
+      return { condition: "Heavy Rain", icon: "CloudRain" };
+    case 66:
+    case 67:
+      return { condition: "Freezing Rain", icon: "CloudSnow" };
+    case 71:
+      return { condition: "Slight Snowfall", icon: "CloudSnow" };
+    case 73:
+      return { condition: "Moderate Snowfall", icon: "CloudSnow" };
+    case 75:
+      return { condition: "Heavy Snowfall", icon: "CloudSnow" };
+    case 77:
+      return { condition: "Snow Grains", icon: "CloudSnow" };
+    case 80:
+      return { condition: "Slight Rain Showers", icon: "CloudRain" };
+    case 81:
+      return { condition: "Moderate Rain Showers", icon: "CloudRain" };
+    case 82:
+      return { condition: "Violent Rain Showers", icon: "CloudRain" };
+    case 85:
+    case 86:
+      return { condition: "Snow Showers", icon: "CloudSnow" };
+    case 95:
+      return { condition: "Thunderstorm", icon: "CloudLightning" };
+    case 96:
+    case 99:
+      return { condition: "Thunderstorm with Hail", icon: "CloudLightning" };
+    default:
+      return { condition: "Fair Weather", icon: "CloudSun" };
+  }
+}
+function getWindCardinal(deg) {
+  if (isNaN(deg)) return "VAR";
+  const directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  const index = Math.round(deg % 360 / 22.5) % 16;
+  return directions[index];
+}
+function cleanHtmlText(raw) {
+  if (!raw) return "";
+  let str = raw.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
+  str = str.replace(/<[^>]+>/g, " ");
+  str = str.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&#8211;/g, "\u2013").replace(/&#8217;/g, "\u2019").replace(/&#8220;/g, "\u201C").replace(/&#8221;/g, "\u201D");
+  return str.replace(/\s+/g, " ").trim();
+}
+function categorizeWeatherHeadline(headline, summary = "") {
+  const combined = (headline + " " + summary).toLowerCase();
+  if (/\b(cyclone|hurricane|typhoon|tropical storm|depression|storm surge)\b/.test(combined)) {
+    return "CYCLONES_HURRICANES";
+  }
+  if (/\b(flash flood|flood|deluge|inundat|cloudburst|heavy rain|downpour|monsoon|overflow|waterlogging)\b/.test(combined)) {
+    return "EXTREME_RAIN_FLOOD";
+  }
+  if (/\b(heatwave|heat wave|scorching|drought|extreme heat|dry spell|water crisis|water scarcity)\b/.test(combined)) {
+    return "HEATWAVE_DROUGHT";
+  }
+  if (/\b(thunderstorm|lightning|hail|hailstorm|gale|blizzard|cold wave|frost|squall)\b/.test(combined)) {
+    return "SEVERE_STORMS";
+  }
+  return "METEOROLOGY_GENERAL";
+}
+function detectRegion(text) {
+  const t = text.toLowerCase();
+  if (/\b(india|chennai|tamil nadu|bengaluru|delhi|mumbai|kolkata|kerala|andhra|odisha|assam|gujarat|pakistan|bangladesh|sri lanka|china|japan|philippines|vietnam|indonesia|australia|asia)\b/.test(t)) {
+    return "ASIA_PACIFIC";
+  }
+  if (/\b(usa|united states|florida|texas|california|mexico|canada|caribbean|cuba|brazil|chile|argentina|atlantic|america)\b/.test(t)) {
+    return "AMERICAS";
+  }
+  if (/\b(uk|britain|england|france|germany|spain|italy|greece|portugal|poland|scandinavia|europe|mediterranean)\b/.test(t)) {
+    return "EUROPE";
+  }
+  if (/\b(egypt|morocco|kenya|south africa|nigeria|saudi|uae|dubai|middle east|sahara|somalia|africa)\b/.test(t)) {
+    return "AFRICA_MIDDLE_EAST";
+  }
+  return "GLOBAL";
+}
+app.get("/api/weather", async (req, res) => {
+  try {
+    const latParam = req.query.lat ? Number(req.query.lat) : 13.1143;
+    const lonParam = req.query.lon ? Number(req.query.lon) : 80.1015;
+    const cityParam = req.query.city || "Avadi Hydrological Basin";
+    const regionParam = req.query.region || "Tamil Nadu";
+    const countryParam = req.query.country || "India";
+    if (isNaN(latParam) || isNaN(lonParam) || latParam < -90 || latParam > 90 || lonParam < -180 || lonParam > 180) {
+      return res.status(400).json({ error: "Invalid latitude (-90 to 90) or longitude (-180 to 180)" });
+    }
+    const cacheKey = `${latParam.toFixed(3)},${lonParam.toFixed(3)}`;
+    const now2 = Date.now();
+    const cached = weatherCache.get(cacheKey);
+    if (cached && now2 - cached.timestamp < WEATHER_CACHE_TTL_MS) {
+      return res.json({ ...cached.data, isCached: true });
+    }
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${latParam}&longitude=${lonParam}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,weather_code,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=auto&forecast_days=7`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 7e3);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "FloodGuard/2.1" }
+    });
+    clearTimeout(timeout);
+    if (!response.ok) {
+      if (cached) {
+        return res.json({ ...cached.data, isCached: true, isStale: true });
+      }
+      return res.status(502).json({ error: "Failed to fetch meteorological data from Open-Meteo" });
+    }
+    const data = await response.json();
+    const currentCode = data.current?.weather_code ?? 0;
+    const currentInfo = getWmoWeatherInfo(currentCode);
+    const currentWindDir = data.current?.wind_direction_10m ?? 0;
+    const hourlyList = [];
+    const hourlyTimes = data.hourly?.time || [];
+    const currentIsoTime = data.current?.time || "";
+    let startIndex = hourlyTimes.findIndex((t) => t >= currentIsoTime);
+    if (startIndex < 0) startIndex = 0;
+    for (let i = startIndex; i < Math.min(startIndex + 24, hourlyTimes.length); i++) {
+      const code = data.hourly?.weather_code?.[i] ?? 0;
+      const info = getWmoWeatherInfo(code);
+      const rawTime = hourlyTimes[i];
+      const hourDate = new Date(rawTime);
+      const hourLabel = isNaN(hourDate.getTime()) ? rawTime.slice(11, 16) : hourDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      hourlyList.push({
+        time: rawTime,
+        hourLabel,
+        temperature: Math.round(data.hourly?.temperature_2m?.[i] ?? 0),
+        humidity: Math.round(data.hourly?.relative_humidity_2m?.[i] ?? 0),
+        precipitationProbability: Math.round(data.hourly?.precipitation_probability?.[i] ?? 0),
+        precipitation: Number(data.hourly?.precipitation?.[i] ?? 0),
+        weatherCode: code,
+        weatherCondition: info.condition,
+        iconName: info.icon,
+        windSpeed: Number(data.hourly?.wind_speed_10m?.[i] ?? 0)
+      });
+    }
+    const dailyList = [];
+    const dailyTimes = data.daily?.time || [];
+    for (let i = 0; i < dailyTimes.length; i++) {
+      const dateStr = dailyTimes[i];
+      const code = data.daily?.weather_code?.[i] ?? 0;
+      const info = getWmoWeatherInfo(code);
+      const dObj = new Date(dateStr);
+      const dayLabel = i === 0 ? "Today" : i === 1 ? "Tomorrow" : isNaN(dObj.getTime()) ? dateStr : dObj.toLocaleDateString([], { weekday: "short" });
+      dailyList.push({
+        date: dateStr,
+        dayLabel,
+        weatherCode: code,
+        weatherCondition: info.condition,
+        iconName: info.icon,
+        tempMax: Math.round(data.daily?.temperature_2m_max?.[i] ?? 0),
+        tempMin: Math.round(data.daily?.temperature_2m_min?.[i] ?? 0),
+        precipitationSum: Number(data.daily?.precipitation_sum?.[i] ?? 0),
+        precipitationProbabilityMax: Math.round(data.daily?.precipitation_probability_max?.[i] ?? 0),
+        windSpeedMax: Number(data.daily?.wind_speed_10m_max?.[i] ?? 0)
+      });
+    }
+    const result = {
+      success: true,
+      provider: "Open-Meteo (CC BY 4.0)",
+      providerUrl: "https://open-meteo.com/",
+      isModelForecast: true,
+      lastUpdated: (/* @__PURE__ */ new Date()).toISOString(),
+      location: {
+        lat: latParam,
+        lon: lonParam,
+        city: cityParam,
+        region: regionParam,
+        country: countryParam
+      },
+      current: {
+        temperature: Number((data.current?.temperature_2m ?? 0).toFixed(1)),
+        apparentTemperature: Number((data.current?.apparent_temperature ?? 0).toFixed(1)),
+        humidity: Math.round(data.current?.relative_humidity_2m ?? 0),
+        weatherCode: currentCode,
+        weatherCondition: currentInfo.condition,
+        iconName: currentInfo.icon,
+        precipitation: Number((data.current?.precipitation ?? 0).toFixed(1)),
+        rain: Number((data.current?.rain ?? 0).toFixed(1)),
+        windSpeed: Number((data.current?.wind_speed_10m ?? 0).toFixed(1)),
+        windDirection: currentWindDir,
+        windDirectionCardinal: getWindCardinal(currentWindDir),
+        isDay: Boolean(data.current?.is_day),
+        timestamp: data.current?.time || (/* @__PURE__ */ new Date()).toISOString()
+      },
+      hourly: hourlyList,
+      daily: dailyList
+    };
+    weatherCache.set(cacheKey, { data: result, timestamp: now2 });
+    res.json(result);
+  } catch (err) {
+    console.error("Weather API error:", err);
+    res.status(500).json({ error: "Failed to retrieve meteorological weather data" });
+  }
+});
+app.get("/api/weather/search", async (req, res) => {
+  try {
+    const q = (req.query.q || "").trim();
+    if (!q || q.length < 2) {
+      return res.json({ results: [] });
+    }
+    const cacheKey = q.toLowerCase();
+    const now2 = Date.now();
+    const cached = geocodingCache.get(cacheKey);
+    if (cached && now2 - cached.timestamp < GEOCODING_CACHE_TTL_MS) {
+      return res.json({ results: cached.results, isCached: true });
+    }
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=en&format=json`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5e3);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "FloodGuard/2.1" }
+    });
+    clearTimeout(timeout);
+    if (!response.ok) {
+      return res.json({ results: [] });
+    }
+    const data = await response.json();
+    const rawResults = data.results || [];
+    const formatted = rawResults.map((r) => ({
+      id: r.id,
+      name: r.name,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      country: r.country || "",
+      countryCode: r.country_code || "",
+      admin1: r.admin1 || r.admin2 || "",
+      timezone: r.timezone || ""
+    }));
+    geocodingCache.set(cacheKey, { results: formatted, timestamp: now2 });
+    res.json({ results: formatted });
+  } catch (err) {
+    console.warn("Geocoding error:", err);
+    res.json({ results: [] });
+  }
+});
+app.get("/api/weather/news/local", async (req, res) => {
+  try {
+    const query = (req.query.query || "Chennai").trim();
+    const region = (req.query.region || "Tamil Nadu").trim();
+    const cacheKey = `${query.toLowerCase()}_${region.toLowerCase()}`;
+    const now2 = Date.now();
+    const cached = localNewsCache.get(cacheKey);
+    if (cached && now2 - cached.timestamp < NEWS_CACHE_TTL_MS) {
+      return res.json({
+        success: true,
+        query,
+        region,
+        total: cached.articles.length,
+        lastUpdated: new Date(cached.timestamp).toISOString(),
+        isCached: true,
+        articles: cached.articles
+      });
+    }
+    const searchQuery = `${query} weather OR rainfall OR monsoon OR cyclone OR IMD`;
+    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(searchQuery)}&hl=en-IN&gl=IN&ceid=IN:en`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8e3);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "FloodGuard/2.1" }
+    });
+    clearTimeout(timeout);
+    if (!response.ok) {
+      if (cached) {
+        return res.json({
+          success: true,
+          query,
+          total: cached.articles.length,
+          lastUpdated: new Date(cached.timestamp).toISOString(),
+          isCached: true,
+          isStale: true,
+          articles: cached.articles
+        });
+      }
+      return res.status(502).json({ error: "Failed to retrieve local weather RSS news" });
+    }
+    const xml = await response.text();
+    const rawItems = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+    const articles = [];
+    const seenTitles = /* @__PURE__ */ new Set();
+    for (let i = 0; i < rawItems.length; i++) {
+      const item = rawItems[i];
+      const titleMatch = item.match(/<title>([\s\S]*?)<\/title>/);
+      const linkMatch = item.match(/<link>([\s\S]*?)<\/link>/);
+      const pubDateMatch = item.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+      const sourceMatch = item.match(/<source[^>]*>([\s\S]*?)<\/source>/);
+      const descMatch = item.match(/<description>([\s\S]*?)<\/description>/);
+      const rawHeadline = cleanHtmlText(titleMatch ? titleMatch[1] : "");
+      const rawLink = linkMatch ? linkMatch[1].trim() : "";
+      if (!rawHeadline || !rawLink.startsWith("http")) continue;
+      const normTitle = rawHeadline.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (seenTitles.has(normTitle)) continue;
+      seenTitles.add(normTitle);
+      const publisher = cleanHtmlText(sourceMatch ? sourceMatch[1] : "") || "News Bulletin";
+      const snippet = cleanHtmlText(descMatch ? descMatch[1] : "").slice(0, 220);
+      const pubDateRaw = pubDateMatch ? pubDateMatch[1].trim() : "";
+      const dateObj = new Date(pubDateRaw);
+      const isValidDate = !isNaN(dateObj.getTime());
+      const publishedDate = isValidDate ? dateObj.toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }) : pubDateRaw || (/* @__PURE__ */ new Date()).toLocaleDateString("en-IN");
+      const publishedTime = isValidDate ? dateObj.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false }) : void 0;
+      const isOfficial = /imd|meteorological|rmc|government|disaster management|ndma|sdma/i.test(publisher + " " + rawHeadline);
+      const category = categorizeWeatherHeadline(rawHeadline, snippet);
+      articles.push({
+        id: `LOC-${Date.now().toString(36)}-${i}`,
+        headline: rawHeadline,
+        publisher,
+        publishedAt: isValidDate ? dateObj.toISOString() : (/* @__PURE__ */ new Date()).toISOString(),
+        publishedDate,
+        publishedTime,
+        timezoneLabel: "IST",
+        sourceUrl: rawLink,
+        locationOrRegion: `${query} / ${region}`,
+        category,
+        region: "LOCAL",
+        snippet,
+        isOfficialBulletin: isOfficial
+      });
+      if (articles.length >= 30) break;
+    }
+    localNewsCache.set(cacheKey, { articles, timestamp: now2 });
+    res.json({
+      success: true,
+      query,
+      region,
+      total: articles.length,
+      lastUpdated: (/* @__PURE__ */ new Date()).toISOString(),
+      articles
+    });
+  } catch (err) {
+    console.error("Local weather news error:", err);
+    res.status(500).json({ error: "Failed to retrieve local weather news feed" });
+  }
+});
+app.get("/api/weather/news/global", async (req, res) => {
+  try {
+    const regionFilter = (req.query.region || "ALL").toUpperCase();
+    const categoryFilter = (req.query.category || "ALL").toUpperCase();
+    const now2 = Date.now();
+    if (globalNewsCache && now2 - globalNewsCache.timestamp < NEWS_CACHE_TTL_MS) {
+      let filtered2 = globalNewsCache.articles;
+      if (regionFilter !== "ALL") {
+        filtered2 = filtered2.filter((a) => a.region === regionFilter);
+      }
+      if (categoryFilter !== "ALL") {
+        filtered2 = filtered2.filter((a) => a.category === categoryFilter);
+      }
+      return res.json({
+        success: true,
+        total: filtered2.length,
+        lastUpdated: new Date(globalNewsCache.timestamp).toISOString(),
+        isCached: true,
+        articles: filtered2
+      });
+    }
+    const articles = [];
+    const seenTitles = /* @__PURE__ */ new Set();
+    try {
+      const gUrl = "https://news.google.com/rss/search?q=extreme+weather+OR+cyclone+OR+hurricane+OR+typhoon+OR+heatwave+OR+flood+OR+meteorological&hl=en&gl=US&ceid=US:en";
+      const gController = new AbortController();
+      const gTimeout = setTimeout(() => gController.abort(), 7e3);
+      const gRes = await fetch(gUrl, { signal: gController.signal, headers: { "User-Agent": "FloodGuard/2.1" } });
+      clearTimeout(gTimeout);
+      if (gRes.ok) {
+        const xml = await gRes.text();
+        const items = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          const titleMatch = item.match(/<title>([\s\S]*?)<\/title>/);
+          const linkMatch = item.match(/<link>([\s\S]*?)<\/link>/);
+          const pubDateMatch = item.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+          const sourceMatch = item.match(/<source[^>]*>([\s\S]*?)<\/source>/);
+          const descMatch = item.match(/<description>([\s\S]*?)<\/description>/);
+          const rawHeadline = cleanHtmlText(titleMatch ? titleMatch[1] : "");
+          const rawLink = linkMatch ? linkMatch[1].trim() : "";
+          if (!rawHeadline || !rawLink.startsWith("http")) continue;
+          const norm = rawHeadline.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (seenTitles.has(norm)) continue;
+          seenTitles.add(norm);
+          const publisher = cleanHtmlText(sourceMatch ? sourceMatch[1] : "") || "Global Wire";
+          const snippet = cleanHtmlText(descMatch ? descMatch[1] : "").slice(0, 220);
+          const dateObj = new Date(pubDateMatch ? pubDateMatch[1].trim() : "");
+          const isValid = !isNaN(dateObj.getTime());
+          const category = categorizeWeatherHeadline(rawHeadline, snippet);
+          const region = detectRegion(rawHeadline + " " + publisher);
+          articles.push({
+            id: `GLB-${Date.now().toString(36)}-${articles.length}`,
+            headline: rawHeadline,
+            publisher,
+            publishedAt: isValid ? dateObj.toISOString() : (/* @__PURE__ */ new Date()).toISOString(),
+            publishedDate: isValid ? dateObj.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : (/* @__PURE__ */ new Date()).toLocaleDateString("en-US"),
+            publishedTime: isValid ? dateObj.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) : void 0,
+            timezoneLabel: "UTC",
+            sourceUrl: rawLink,
+            locationOrRegion: region === "GLOBAL" ? "International" : region.replace("_", " "),
+            category,
+            region,
+            snippet,
+            isOfficialBulletin: /noaa|wmo|national weather service|met office|copernicus/i.test(publisher + " " + rawHeadline)
+          });
+          if (articles.length >= 35) break;
+        }
+      }
+    } catch (gErr) {
+      console.warn("Google global weather feed error:", gErr);
+    }
+    try {
+      const gdacsUrl = "https://www.gdacs.org/xml/rss.xml";
+      const gdacsController = new AbortController();
+      const gdacsTimeout = setTimeout(() => gdacsController.abort(), 6e3);
+      const gdacsRes = await fetch(gdacsUrl, { signal: gdacsController.signal, headers: { "User-Agent": "FloodGuard/2.1" } });
+      clearTimeout(gdacsTimeout);
+      if (gdacsRes.ok) {
+        const xml = await gdacsRes.text();
+        const items = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+        for (const item of items) {
+          const eventType = (item.match(/<gdacs:eventtype>([\s\S]*?)<\/gdacs:eventtype>/) || [])[1];
+          if (!eventType || !["TC", "FL", "DR"].includes(eventType)) continue;
+          const titleMatch = item.match(/<title>([\s\S]*?)<\/title>/);
+          const linkMatch = item.match(/<link>([\s\S]*?)<\/link>/);
+          const pubDateMatch = item.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+          const countryMatch = item.match(/<gdacs:country>([\s\S]*?)<\/gdacs:country>/);
+          const alertLevel = (item.match(/<gdacs:alertlevel>([\s\S]*?)<\/gdacs:alertlevel>/) || [])[1];
+          const rawHeadline = cleanHtmlText(titleMatch ? titleMatch[1] : "");
+          const rawLink = linkMatch ? linkMatch[1].trim() : "";
+          if (!rawHeadline || !rawLink.startsWith("http")) continue;
+          const norm = rawHeadline.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (seenTitles.has(norm)) continue;
+          seenTitles.add(norm);
+          const country = cleanHtmlText(countryMatch ? countryMatch[1] : "") || "Global";
+          const dateObj = new Date(pubDateMatch ? pubDateMatch[1].trim() : "");
+          const isValid = !isNaN(dateObj.getTime());
+          const category = eventType === "TC" ? "CYCLONES_HURRICANES" : eventType === "DR" ? "HEATWAVE_DROUGHT" : "EXTREME_RAIN_FLOOD";
+          const region = detectRegion(country + " " + rawHeadline);
+          articles.push({
+            id: `GDACS-${Date.now().toString(36)}-${articles.length}`,
+            headline: `[${alertLevel || "Alert"}] ${rawHeadline}`,
+            publisher: "GDACS (UN / EC Meteorological Alert)",
+            publishedAt: isValid ? dateObj.toISOString() : (/* @__PURE__ */ new Date()).toISOString(),
+            publishedDate: isValid ? dateObj.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : (/* @__PURE__ */ new Date()).toLocaleDateString("en-US"),
+            publishedTime: isValid ? dateObj.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) : void 0,
+            timezoneLabel: "UTC",
+            sourceUrl: rawLink,
+            locationOrRegion: country,
+            category,
+            region,
+            snippet: `Official international disaster coordination bulletin for ${country}. Event type: ${eventType}.`,
+            isOfficialBulletin: true
+          });
+          if (articles.length >= 50) break;
+        }
+      }
+    } catch (gdacsErr) {
+      console.warn("GDACS feed error:", gdacsErr);
+    }
+    articles.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+    globalNewsCache = { articles, timestamp: now2 };
+    let filtered = articles;
+    if (regionFilter !== "ALL") {
+      filtered = filtered.filter((a) => a.region === regionFilter);
+    }
+    if (categoryFilter !== "ALL") {
+      filtered = filtered.filter((a) => a.category === categoryFilter);
+    }
+    res.json({
+      success: true,
+      total: filtered.length,
+      lastUpdated: (/* @__PURE__ */ new Date()).toISOString(),
+      articles: filtered
+    });
+  } catch (err) {
+    console.error("Global weather news error:", err);
+    res.status(500).json({ error: "Failed to retrieve global weather news feed" });
+  }
+});
 async function startServer() {
   if (process.env.NODE_ENV === "production") {
     const distPath = fs.existsSync(path.join(__dirname, "dist")) ? path.join(__dirname, "dist") : __dirname;

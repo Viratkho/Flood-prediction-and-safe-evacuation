@@ -377,5 +377,115 @@ export interface FirewallSecurityStatus {
   recentLogs: FirewallThreatLog[];
 }
 
+// ==========================================
+// Weather and Weather News Integration Types
+// (Informational only — Decoupled from core flood risk engine)
+// ==========================================
+
+export interface CurrentWeatherReport {
+  temperature: number;
+  apparentTemperature: number;
+  humidity: number;
+  weatherCode: number;
+  weatherCondition: string;
+  iconName: string;
+  precipitation: number;
+  rain: number;
+  windSpeed: number;
+  windDirection: number;
+  windDirectionCardinal: string;
+  isDay: boolean;
+  timestamp: string;
+}
+
+export interface HourlyForecastItem {
+  time: string;
+  hourLabel: string;
+  temperature: number;
+  humidity: number;
+  precipitationProbability: number;
+  precipitation: number;
+  weatherCode: number;
+  weatherCondition: string;
+  iconName: string;
+  windSpeed: number;
+}
+
+export interface DailyForecastItem {
+  date: string;
+  dayLabel: string;
+  weatherCode: number;
+  weatherCondition: string;
+  iconName: string;
+  tempMax: number;
+  tempMin: number;
+  precipitationSum: number;
+  precipitationProbabilityMax: number;
+  windSpeedMax: number;
+}
+
+export interface LocationWeatherData {
+  success: boolean;
+  provider: string;
+  providerUrl: string;
+  isModelForecast: boolean;
+  lastUpdated: string;
+  isCached?: boolean;
+  location: {
+    lat: number;
+    lon: number;
+    city: string;
+    region?: string;
+    country?: string;
+  };
+  current: CurrentWeatherReport;
+  hourly: HourlyForecastItem[];
+  daily: DailyForecastItem[];
+}
+
+export interface CitySearchResult {
+  id: number;
+  name: string;
+  latitude: number;
+  longitude: number;
+  country: string;
+  countryCode?: string;
+  admin1?: string; // State / Province / District
+  timezone?: string;
+}
+
+export type WeatherNewsCategory =
+  | 'ALL'
+  | 'CYCLONES_HURRICANES'
+  | 'EXTREME_RAIN_FLOOD'
+  | 'HEATWAVE_DROUGHT'
+  | 'SEVERE_STORMS'
+  | 'METEOROLOGY_GENERAL';
+
+export type WeatherNewsRegion =
+  | 'ALL'
+  | 'LOCAL'
+  | 'ASIA_PACIFIC'
+  | 'AMERICAS'
+  | 'EUROPE'
+  | 'AFRICA_MIDDLE_EAST'
+  | 'GLOBAL';
+
+export interface WeatherNewsArticle {
+  id: string;
+  headline: string;
+  publisher: string;
+  publishedAt: string; // ISO 8601 string
+  publishedDate: string; // e.g. "23 Oct 2026"
+  publishedTime?: string; // e.g. "08:27"
+  timezoneLabel: string; // e.g. "IST" or "UTC"
+  sourceUrl: string;
+  locationOrRegion: string; // e.g. "Chennai / Tamil Nadu" or "India" or "Global"
+  category: WeatherNewsCategory;
+  region: WeatherNewsRegion;
+  snippet?: string;
+  isOfficialBulletin?: boolean;
+}
+
 
 

@@ -7,6 +7,7 @@ import { PersonMonitoringPanel } from './components/PersonMonitoringPanel';
 import { IncidentWorkspace } from './components/IncidentWorkspace';
 import { ResearchSimulationMode } from './components/ResearchSimulationMode';
 import { PersonIntakeForm } from './components/PersonIntakeForm';
+import { WeatherNewsHub } from './components/WeatherNewsHub';
 import { MobileAlertModal } from './components/MobileAlertModal';
 import { FirewallSecurityModal } from './components/FirewallSecurityModal';
 import { SystemTestRunnerModal } from './components/SystemTestRunnerModal';
@@ -41,6 +42,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Bot,
+  CloudSun,
   Compass,
   Download,
   FileText,
@@ -65,6 +67,7 @@ import {
 type TabView =
   | 'command-center'
   | 'evacuation-app'
+  | 'weather-news'
   | 'person-monitoring'
   | 'person-intake'
   | 'incident-workspace'
@@ -767,6 +770,18 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setActiveTab('weather-news')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'weather-news'
+                ? 'bg-sky-700/80 text-white shadow-lg border border-sky-500/50'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <CloudSun className="w-4 h-4 text-sky-400" />
+            <span>Weather & News</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('research-simulation')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'research-simulation'
@@ -804,7 +819,7 @@ export default function App() {
             <Activity className="w-3.5 h-3.5" />
             <span>Live Testing</span>
             <span className="hidden lg:inline text-[9px] px-1.5 py-0.2 rounded bg-indigo-400/30 font-mono font-bold">
-              23 TESTS
+              27 TESTS
             </span>
           </button>
 
@@ -926,6 +941,10 @@ export default function App() {
             onOpenOfflineManager={() => setIsOfflineManagerOpen(true)}
             isOfflineMode={isOfflineMode}
           />
+        )}
+
+        {activeTab === 'weather-news' && (
+          <WeatherNewsHub userLocation={userLocation} />
         )}
 
         {activeTab === 'research-simulation' && (

@@ -261,6 +261,50 @@ if c_exp == 200 and "Timestamp,ScenarioID,ScenarioName" in str(r_exp):
 else:
     test("TC-BE-018: Research Dataset CSV Export", "FAIL", f"HTTP {c_exp}: {str(r_exp)[:100]}")
 
+# Test 22: Weather & News - Current & Forecast Weather (Open-Meteo Proxy)
+c_w, r_w = request("GET", "/api/weather?lat=13.1143&lon=80.1015&city=Avadi")
+if c_w == 200 and isinstance(r_w, dict) and "current" in r_w and "daily" in r_w:
+    curr = r_w["current"]
+    temp = curr.get("temperature")
+    cond = curr.get("weatherCondition")
+    hourly_cnt = len(r_w.get("hourly", []))
+    daily_cnt = len(r_w.get("daily", []))
+    test("TC-BE-019: Open-Meteo Current & Forecast Weather", "PASS", f"Temp: {temp}°C, {cond}, Hourly points: {hourly_cnt}, 7-Day days: {daily_cnt}")
+else:
+    test("TC-BE-019: Open-Meteo Current & Forecast Weather", "FAIL", f"HTTP {c_w}: {str(r_w)[:120]}")
+
+# Test 23: Weather & News - Geocoding City Search
+c_s, r_s = request("GET", "/api/weather/search?q=Chennai")
+if c_s == 200 and isinstance(r_s, dict) and "results" in r_s and len(r_s["results"]) > 0:
+    first_res = r_s["results"][0]
+    name = first_res.get("name")
+    country = first_res.get("country")
+    test("TC-BE-020: Geocoding Location Search", "PASS", f"Found {len(r_s['results'])} candidates. Top: {name}, {country} ({first_res.get('latitude')}, {first_res.get('longitude')})")
+else:
+    test("TC-BE-020: Geocoding Location Search", "FAIL", f"HTTP {c_s}: {str(r_s)[:120]}")
+
+# Test 24: Weather & News - Local Meteorological News Feeds (IMD / Regional)
+c_ln, r_ln = request("GET", "/api/weather/news/local?location=Chennai")
+if c_ln == 200 and isinstance(r_ln, dict) and "articles" in r_ln and len(r_ln["articles"]) > 0:
+    arts = r_ln["articles"]
+    first_art = arts[0]
+    headline = first_art.get("headline") or "Local Weather Bulletin"
+    publisher = first_art.get("publisher") or "IMD"
+    test("TC-BE-021: Local Weather News Feeds", "PASS", f"Retrieved {len(arts)} local weather articles. Latest: '{headline[:60]}...' by {publisher}")
+else:
+    test("TC-BE-021: Local Weather News Feeds", "FAIL", f"HTTP {c_ln}: {str(r_ln)[:120]}")
+
+# Test 25: Weather & News - Global Extreme Weather Feeds (GDACS/Global)
+c_gn, r_gn = request("GET", "/api/weather/news/global")
+if c_gn == 200 and isinstance(r_gn, dict) and "articles" in r_gn and len(r_gn["articles"]) > 0:
+    g_arts = r_gn["articles"]
+    first_g = g_arts[0]
+    g_headline = first_g.get("headline") or "Global Weather Alert"
+    g_region = first_g.get("region") or "GLOBAL"
+    test("TC-BE-022: Global Weather & Disaster News Feeds", "PASS", f"Retrieved {len(g_arts)} global articles across regions. Latest: '{g_headline[:60]}...' [{g_region}]")
+else:
+    test("TC-BE-022: Global Weather & Disaster News Feeds", "FAIL", f"HTTP {c_gn}: {str(r_gn)[:120]}")
+
 print("\n=== SUMMARY OF RESULTS ===")
 total = len(results)
 passed = sum(1 for r in results if r["status"] == "PASS")

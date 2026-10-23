@@ -29,7 +29,7 @@ import { voiceNav } from '../services/voiceNav';
 export interface TestCase {
   id: string;
   name: string;
-  category: 'FRONTEND' | 'BACKEND' | 'HYDROLOGY' | 'FREE_SMS' | 'SECURITY' | 'RESEARCH';
+  category: 'FRONTEND' | 'BACKEND' | 'HYDROLOGY' | 'FREE_SMS' | 'SECURITY' | 'RESEARCH' | 'WEATHER';
   description: string;
   endpoint?: string;
   status: 'IDLE' | 'RUNNING' | 'PASS' | 'FAIL';
@@ -249,6 +249,40 @@ const INITIAL_TEST_CASES: TestCase[] = [
     category: 'RESEARCH',
     description: 'Verify CSV headers (Timestamp, ScenarioID, Priority) and streaming data formatting',
     endpoint: 'GET /api/research/export?format=csv',
+    status: 'IDLE',
+  },
+
+  // 7. Free Weather & Meteorological News Feeds
+  {
+    id: 'TC-WEA-001',
+    name: 'Open-Meteo Weather Forecast (Avadi Basin)',
+    category: 'WEATHER',
+    description: 'Fetch current temperature, apparent temp, WMO weather codes, 24-hr hourly and 7-day model forecast',
+    endpoint: 'GET /api/weather?lat=13.1143&lon=80.1015&city=Avadi',
+    status: 'IDLE',
+  },
+  {
+    id: 'TC-WEA-002',
+    name: 'Geocoding Location Autocomplete Search',
+    category: 'WEATHER',
+    description: 'Query Open-Meteo geocoding search for coordinate resolution without paid key or billing credentials',
+    endpoint: 'GET /api/weather/search?q=Chennai',
+    status: 'IDLE',
+  },
+  {
+    id: 'TC-WEA-003',
+    name: 'Local Weather & IMD Bulletins Feeds',
+    category: 'WEATHER',
+    description: 'Retrieve sanitized regional meteorological bulletins and severe rainfall news from free public RSS',
+    endpoint: 'GET /api/weather/news/local?location=Chennai',
+    status: 'IDLE',
+  },
+  {
+    id: 'TC-WEA-004',
+    name: 'Global Disaster & Severe Weather Feeds',
+    category: 'WEATHER',
+    description: 'Retrieve international severe storm, tropical cyclone, drought, and heatwave reports via GDACS and BBC',
+    endpoint: 'GET /api/weather/news/global',
     status: 'IDLE',
   },
 ];
@@ -732,6 +766,66 @@ export const SystemTestRunnerModal: React.FC<SystemTestRunnerModalProps> = ({
         } else {
           throw new Error('CSV export invalid');
         }
+      } else if (testCase.id === 'TC-WEA-001') {
+        const res = await fetch('/api/weather?lat=13.1143&lon=80.1015&city=Avadi');
+        const data = await res.json();
+        const latency = Math.round(performance.now() - startTime);
+        if (res.ok && data.current && data.daily) {
+          updated = {
+            ...updated,
+            status: 'PASS',
+            latencyMs: latency,
+            resultDetail: `Open-Meteo live: ${data.current.temperature}°C, ${data.current.weatherCondition}, ${data.daily.length} daily forecast periods, cached: ${data.isCached}`,
+            responsePayload: data,
+          };
+        } else {
+          throw new Error('Failed to retrieve weather');
+        }
+      } else if (testCase.id === 'TC-WEA-002') {
+        const res = await fetch('/api/weather/search?q=Chennai');
+        const data = await res.json();
+        const latency = Math.round(performance.now() - startTime);
+        if (res.ok && Array.isArray(data.results) && data.results.length > 0) {
+          updated = {
+            ...updated,
+            status: 'PASS',
+            latencyMs: latency,
+            resultDetail: `Geocoded ${data.results.length} locations. Top: ${data.results[0].name}, ${data.results[0].country} (${data.results[0].latitude}, ${data.results[0].longitude})`,
+            responsePayload: data,
+          };
+        } else {
+          throw new Error('No geocoding results');
+        }
+      } else if (testCase.id === 'TC-WEA-003') {
+        const res = await fetch('/api/weather/news/local?location=Chennai');
+        const data = await res.json();
+        const latency = Math.round(performance.now() - startTime);
+        if (res.ok && Array.isArray(data.articles) && data.articles.length > 0) {
+          updated = {
+            ...updated,
+            status: 'PASS',
+            latencyMs: latency,
+            resultDetail: `Retrieved ${data.articles.length} regional bulletins. Latest: "${data.articles[0].headline.slice(0, 45)}..." from ${data.articles[0].publisher}`,
+            responsePayload: data,
+          };
+        } else {
+          throw new Error('Failed to fetch local weather news');
+        }
+      } else if (testCase.id === 'TC-WEA-004') {
+        const res = await fetch('/api/weather/news/global');
+        const data = await res.json();
+        const latency = Math.round(performance.now() - startTime);
+        if (res.ok && Array.isArray(data.articles) && data.articles.length > 0) {
+          updated = {
+            ...updated,
+            status: 'PASS',
+            latencyMs: latency,
+            resultDetail: `Retrieved ${data.articles.length} global extreme weather reports across international regions (GDACS & BBC)`,
+            responsePayload: data,
+          };
+        } else {
+          throw new Error('Failed to fetch global weather news');
+        }
       }
     } catch (err: any) {
       const latency = Math.round(performance.now() - startTime);
@@ -956,7 +1050,7 @@ export const SystemTestRunnerModal: React.FC<SystemTestRunnerModalProps> = ({
 
           {activeTab === 'tests' && (
             <div className="flex items-center gap-1 overflow-x-auto">
-              {['ALL', 'FRONTEND', 'HYDROLOGY', 'BACKEND', 'FREE_SMS', 'SECURITY', 'RESEARCH'].map((cat) => (
+              {['ALL', 'FRONTEND', 'HYDROLOGY', 'BACKEND', 'WEATHER', 'FREE_SMS', 'SECURITY', 'RESEARCH'].map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setFilterCategory(cat)}
