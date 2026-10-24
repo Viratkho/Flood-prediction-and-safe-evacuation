@@ -80,13 +80,13 @@ type TabView =
   | 'research-simulation';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabView>('command-center');
+  const [activeTab, setActiveTab] = useState<TabView>('person-intake');
   const [isOfflineManagerOpen, setIsOfflineManagerOpen] = useState(false);
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
   const [isIntakeModalOpen, setIsIntakeModalOpen] = useState(false);
   const [isMobileAlertModalOpen, setIsMobileAlertModalOpen] = useState(false);
   const [isFirewallModalOpen, setIsFirewallModalOpen] = useState(false);
-  const [isTestRunnerOpen, setIsTestRunnerOpen] = useState(true);
+  const [isTestRunnerOpen, setIsTestRunnerOpen] = useState(false);
   const [selectedAlertPerson, setSelectedAlertPerson] = useState<RegisteredPerson | null>(null);
   const [activeAdvisePerson, setActiveAdvisePerson] = useState<RegisteredPerson | null>(null);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
@@ -94,20 +94,33 @@ export default function App() {
     typeof window !== 'undefined' ? window.innerWidth : 1280
   );
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isWatchGlanceMode, setIsWatchGlanceMode] = useState(false);
+  const [isWatchGlanceMode, setIsWatchGlanceMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.hash === '#watch';
+    }
+    return false;
+  });
 
-  // Monitor responsive viewport & auto-engage watch mode on <= 320px
+  // Responsive viewport and URL hash popstate listener
   useEffect(() => {
     const handleResize = () => {
       const w = window.innerWidth;
       setWindowWidth(w);
-      if (w <= 320) {
+    };
+    const handlePopState = (e: PopStateEvent) => {
+      if (window.location.hash === '#watch' || e.state?.isWatchGlanceMode) {
         setIsWatchGlanceMode(true);
+      } else {
+        setIsWatchGlanceMode(false);
       }
     };
     handleResize();
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, []);
 
   // Basin and Sensor State
@@ -665,9 +678,13 @@ export default function App() {
     setSelectedFocusLocation([newPerson.lat, newPerson.lng]);
     setFocusedPersonId(newPerson.personId);
 
-    if (autoShowOnMap) {
-      setActiveTab('command-center');
-      setIsIntakeModalOpen(false);
+    // Navigate directly to Watch mode upon successful registration
+    setIsWatchGlanceMode(true);
+    setIsIntakeModalOpen(false);
+    try {
+      window.history.pushState({ isWatchGlanceMode: true }, '', '#watch');
+    } catch {
+      // ignore
     }
 
     voiceNav.speak(
@@ -740,7 +757,7 @@ export default function App() {
   return (
     <div className="flex flex-col w-full min-h-screen h-[100dvh] max-h-[100dvh] overflow-hidden bg-slate-950 font-sans selection:bg-[#ff7700] selection:text-white relative">
       {/* Universal Top Master Navigation & Telemetry Banner */}
-      <header className="z-30 bg-slate-950 border-b border-slate-800 px-3 sm:px-4 py-2 text-white shrink-0">
+      <header className={`z-30 bg-slate-950 border-b border-slate-800 px-3 sm:px-4 py-2 text-white shrink-0 ${isWatchGlanceMode ? 'hidden' : ''}`}>
         {/* Mobile Top Bar (Screens < 768px) */}
         <div className="flex md:hidden items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -1232,23 +1249,30 @@ export default function App() {
             damTelemetry={damTelemetry}
             people={people}
             reliefCentres={reliefCentres}
+            nodes={INITIAL_ROAD_NODES}
+            segments={segments}
             userLocation={userLocation}
             sharedLocation={sharedLocation}
-            onOpenEvacuation={() => {
+            registeredPerson={selectedAlertPerson || people.find((p) => p.isUserRegistered) || null}
+            onNavigateToAssistantAi={() => {
               setIsWatchGlanceMode(false);
-              setActiveTab('evacuation-app');
+              setIsAiAssistantOpen(true);
             }}
-            onOpenWeatherNews={() => {
+            onNavigateToOfflineMap={() => {
+              setIsWatchGlanceMode(false);
+              setIsOfflineManagerOpen(true);
+            }}
+            onNavigateToWeather={() => {
               setIsWatchGlanceMode(false);
               setActiveTab('weather-news');
             }}
-            onOpenPersonMonitoring={() => {
-              setIsWatchGlanceMode(false);
-              setActiveTab('person-monitoring');
-            }}
-            onOpenCommandCenter={() => {
+            onNavigateToWaterStagnation={() => {
               setIsWatchGlanceMode(false);
               setActiveTab('command-center');
+            }}
+            onNavigateToSos={() => {
+              setIsWatchGlanceMode(false);
+              setActiveTab('incident-workspace');
             }}
             onSwitchToFullView={() => setIsWatchGlanceMode(false)}
           />
