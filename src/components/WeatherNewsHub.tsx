@@ -7,6 +7,7 @@ import {
   WeatherNewsArticle,
   WeatherNewsCategory,
   WeatherNewsRegion,
+  SharedLocationState,
 } from '../types/floodguard';
 import {
   Sun,
@@ -44,6 +45,8 @@ import {
 
 interface WeatherNewsHubProps {
   userLocation?: [number, number];
+  sharedLocation?: SharedLocationState;
+  onUpdateSharedLocation?: (loc: SharedLocationState) => void;
 }
 
 const DEFAULT_LOCATION = {
@@ -252,7 +255,7 @@ const PRESET_QUICK_CITIES = [
   { name: 'Delhi NCR', region: 'Delhi', lat: 28.6139, lon: 77.2090, country: 'India' },
 ];
 
-export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation }) => {
+export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sharedLocation, onUpdateSharedLocation }) => {
   // Load preferred location from localStorage if saved
   const [selectedLocation, setSelectedLocation] = useState(() => {
     try {
@@ -309,6 +312,34 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation }) 
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string>('');
 
   const searchBoxRef = useRef<HTMLDivElement>(null);
+  const weatherReqIdRef = useRef(0);
+  const localNewsReqIdRef = useRef(0);
+  const globalNewsReqIdRef = useRef(0);
+  const weatherClientCache = useRef<Map<string, { data: LocationWeatherData; timestamp: number }>>(new Map());
+
+  // Synchronize with external SharedLocationState when updated
+  useEffect(() => {
+    if (sharedLocation && sharedLocation.latitude && sharedLocation.longitude) {
+      setSelectedLocation((prev: any) => {
+        if (
+          prev.lat === sharedLocation.latitude &&
+          prev.lon === sharedLocation.longitude &&
+          prev.city === sharedLocation.placeName
+        ) {
+          return prev;
+        }
+        return {
+          lat: sharedLocation.latitude,
+          lon: sharedLocation.longitude,
+          city: sharedLocation.placeName,
+          region: sharedLocation.administrativeRegion || '',
+          country: sharedLocation.country,
+          countryCode: sharedLocation.countryCode,
+          timezone: sharedLocation.timezone,
+        };
+      });
+    }
+  }, [sharedLocation]);
 
   // Close search dropdown on click outside
   useEffect(() => {
@@ -321,8 +352,21 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation }) 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Fetch weather data for selected coordinates with resilient direct fallback
+  // Fetch weather data for selected coordinates with resilient direct fallback & stale request prevention
   const fetchWeather = async (lat: number, lon: number, city: string, region: string, country: string) => {
+    const currentReqId = ++weatherReqIdRef.current;
+    const cacheKey = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+
+    // Check client-side in-memory cache first (10 min TTL)
+    const cached = weatherClientCache.current.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < 10 * 60 * 1000)) {
+      setWeatherData(cached.data);
+      setWeatherLoading(false);
+      setWeatherError(null);
+      setLastRefreshedAt(new Date(cached.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      return;
+    }
+
     setWeatherLoading(true);
     setWeatherError(null);
     let weatherLoaded = false;
@@ -336,9 +380,13 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation }) 
       if (res.ok && contentType.includes('application/json')) {
         const data: LocationWeatherData = await res.json();
         if (data && data.current) {
-          setWeatherData(data);
-          setWeatherError(null);
-          setLastRefreshedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          if (currentReqId === weatherReqIdRef.current) {
+            weatherClientCache.current.set(cacheKey, { data, timestamp: Date.now() });
+            setWeatherData(data);
+            setWeatherError(null);
+            setLastRefreshedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            setWeatherLoading(false);
+          }
           weatherLoaded = true;
           return;
         }
@@ -436,128 +484,73 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation }) 
             daily: dailyList,
           };
 
-          setWeatherData(parsedData);
-          setWeatherError(null);
-          setLastRefreshedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          if (currentReqId === weatherReqIdRef.current) {
+            weatherClientCache.current.set(cacheKey, { data: parsedData, timestamp: Date.now() });
+            setWeatherData(parsedData);
+            setWeatherError(null);
+            setLastRefreshedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            setWeatherLoading(false);
+          }
           weatherLoaded = true;
           return;
         }
       } catch (directErr) {
-        console.warn('Direct Open-Meteo fetch error, engaging emergency offline baseline:', directErr);
+        console.warn('Direct Open-Meteo fetch error:', directErr);
       }
     }
 
-    // 3. Emergency Offline Meteorological Telemetry Fallback
-    if (!weatherLoaded) {
-      const now = new Date();
-      const currentHour = now.getHours();
-      const isDaytime = currentHour >= 6 && currentHour < 18;
-
-      const offlineHourly: HourlyForecastItem[] = Array.from({ length: 24 }).map((_, i) => {
-        const h = (currentHour + i) % 24;
-        const d = new Date(now.getTime() + i * 3600000);
-        return {
-          time: d.toISOString(),
-          hourLabel: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          temperature: Math.round(28 + Math.sin((h - 6) / 18 * Math.PI) * 4),
-          humidity: Math.round(75 - Math.sin((h - 6) / 18 * Math.PI) * 15),
-          precipitationProbability: 35,
-          precipitation: 0.1,
-          weatherCode: 2,
-          weatherCondition: 'Partly Cloudy',
-          iconName: 'CloudSun',
-          windSpeed: 14.5,
-        };
-      });
-
-      const offlineDaily: DailyForecastItem[] = Array.from({ length: 7 }).map((_, i) => {
-        const d = new Date(now.getTime() + i * 86400000);
-        return {
-          date: d.toISOString().split('T')[0],
-          dayLabel: i === 0 ? 'Today' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-          weatherCode: i === 0 ? 2 : (i % 2 === 0 ? 61 : 2),
-          weatherCondition: i === 0 ? 'Partly Cloudy' : (i % 2 === 0 ? 'Light Rain' : 'Partly Cloudy'),
-          iconName: i === 0 ? 'CloudSun' : (i % 2 === 0 ? 'CloudRain' : 'CloudSun'),
-          tempMax: 32.5,
-          tempMin: 25.0,
-          precipitationSum: i % 2 === 0 ? 3.5 : 0.5,
-          precipitationProbabilityMax: i % 2 === 0 ? 60 : 30,
-          windSpeedMax: 18.0,
-        };
-      });
-
-      const offlineData: LocationWeatherData = {
-        success: true,
-        provider: 'FloodGuard Offline Telemetry (Regional Climate Baseline)',
-        providerUrl: 'https://open-meteo.com/',
-        isModelForecast: true,
-        isCached: true,
-        lastUpdated: now.toISOString(),
-        location: { lat, lon, city, region, country },
-        current: {
-          temperature: 28.5,
-          apparentTemperature: 31.0,
-          humidity: 76,
-          weatherCode: 2,
-          weatherCondition: 'Partly Cloudy (Regional Telemetry)',
-          iconName: 'CloudSun',
-          precipitation: 0.2,
-          rain: 0.2,
-          windSpeed: 15.2,
-          windDirection: 45,
-          windDirectionCardinal: 'NE',
-          isDay: isDaytime,
-          timestamp: now.toISOString(),
-        },
-        hourly: offlineHourly,
-        daily: offlineDaily,
-      };
-
-      setWeatherData(offlineData);
-      setWeatherError(null);
-      setLastRefreshedAt(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    // 3. Clean error state when all live sources fail (No fake fallback numbers)
+    if (!weatherLoaded && currentReqId === weatherReqIdRef.current) {
+      setWeatherData(null);
+      setWeatherError(`Unable to retrieve live forecast from Open-Meteo for "${city}". Please check network connection.`);
+      setWeatherLoading(false);
     }
-
-    setWeatherLoading(false);
   };
 
-  // Fetch local weather news for city / region with resilient fallback
-  const fetchLocalNews = async (city: string, region: string) => {
+  // Fetch local weather news for city / region with dynamic location filtering & stale request prevention
+  const fetchLocalNews = async (city: string, region: string, country?: string, countryCode?: string, timezone?: string) => {
+    const currentReqId = ++localNewsReqIdRef.current;
     setLocalNewsLoading(true);
     setLocalNewsError(null);
     let loaded = false;
 
     try {
-      const res = await fetch(
-        `/api/weather/news/local?query=${encodeURIComponent(city)}&region=${encodeURIComponent(region)}`
-      );
+      const qParams = new URLSearchParams({
+        query: city,
+        region: region || '',
+        country: country || 'India',
+        countryCode: countryCode || '',
+        timezone: timezone || '',
+      });
+      const res = await fetch(`/api/weather/news/local?${qParams.toString()}`);
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
-        if (Array.isArray(data.articles) && data.articles.length > 0) {
-          setLocalNews(data.articles);
-          setLocalNewsError(null);
-          loaded = true;
-          return;
+        if (currentReqId === localNewsReqIdRef.current) {
+          if (Array.isArray(data.articles)) {
+            setLocalNews(data.articles);
+            setLocalNewsError(null);
+            loaded = true;
+          }
         }
       }
     } catch (err) {
-      console.warn('Backend local news fetch error, engaging verified regional meteorological wire:', err);
+      console.warn('Local weather news fetch warning:', err);
     }
 
-    if (!loaded) {
-      // Use verified regional meteorological bulletins adapted for the selected city
-      const localizedBulletins = RESILIENT_LOCAL_BULLETINS.map(b => ({
-        ...b,
-        title: b.headline.includes('Chennai') && city && !city.includes('Chennai')
-          ? b.headline.replace('Chennai', city)
-          : b.headline,
-      }));
-      setLocalNews(localizedBulletins);
-      setLocalNewsError(null);
+    if (!loaded && currentReqId === localNewsReqIdRef.current) {
+      // If the location is in the Chennai/Tamil Nadu basin, use genuine public bulletins
+      if (/chennai|avadi|tamil nadu|ambattur/i.test(`${city} ${region} ${country}`)) {
+        setLocalNews(RESILIENT_LOCAL_BULLETINS);
+      } else {
+        // Genuine empty state for international locations when feed returns no hits (No fake news)
+        setLocalNews([]);
+      }
     }
 
-    setLocalNewsLoading(false);
+    if (currentReqId === localNewsReqIdRef.current) {
+      setLocalNewsLoading(false);
+    }
   };
 
   // Fetch global weather news with resilient fallback
@@ -597,10 +590,16 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation }) 
         selectedLocation.lat,
         selectedLocation.lon,
         selectedLocation.city,
-        selectedLocation.region,
-        selectedLocation.country
+        selectedLocation.region || '',
+        selectedLocation.country || ''
       );
-      fetchLocalNews(selectedLocation.city, selectedLocation.region);
+      fetchLocalNews(
+        selectedLocation.city,
+        selectedLocation.region || '',
+        selectedLocation.country || '',
+        selectedLocation.countryCode || '',
+        selectedLocation.timezone || ''
+      );
     }
   }, [selectedLocation.lat, selectedLocation.lon]);
 
@@ -645,11 +644,27 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation }) 
       city: cityResult.name,
       region: cityResult.admin1 || cityResult.country,
       country: cityResult.country,
+      countryCode: cityResult.countryCode || '',
+      timezone: cityResult.timezone || '',
     };
     setSelectedLocation(newLoc);
     setSearchQuery('');
     setSearchResults([]);
     setShowSearchDropdown(false);
+
+    // Propagate single source of truth across all modules
+    if (onUpdateSharedLocation) {
+      onUpdateSharedLocation({
+        placeName: cityResult.name,
+        administrativeRegion: cityResult.admin1 || '',
+        country: cityResult.country,
+        countryCode: cityResult.countryCode || '',
+        latitude: newLoc.lat,
+        longitude: newLoc.lon,
+        timezone: cityResult.timezone || '',
+        locationSource: 'SEARCH',
+      });
+    }
   };
 
   // Save current city as preferred
@@ -1117,6 +1132,18 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation }) 
                       </span>
                     </div>
 
+                    {/* Flood Runoff Hazard Indicator */}
+                    {weatherData && (weatherData.current.rain > 10 || weatherData.current.precipitation > 15 || weatherData.daily.some(d => d.precipitationSum > 35)) && (
+                      <div className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-xl flex items-start gap-2.5 text-xs text-amber-200">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold text-amber-300 block">Heavy Precipitation / Runoff Accumulation Indicator</span>
+                          Atmospheric rainfall model projects elevated runoff rates ({Math.max(weatherData.current.rain, weatherData.current.precipitation)} mm/h).
+                          <span className="block text-[10px] text-amber-400/80 mt-0.5">Note: Numerical weather forecasts indicate atmospheric precipitation and are distinct from verified hydrological water-level gauges.</span>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
                       {/* Humidity */}
                       <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80">
@@ -1350,8 +1377,32 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation }) 
                 <span>{localNewsError}</span>
               </div>
             ) : filteredLocalNews.length === 0 ? (
-              <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-xs text-slate-400">
-                No local weather news matched your filter criteria for {selectedLocation.city}.
+              <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-xs text-slate-400 space-y-3">
+                <Newspaper className="w-8 h-8 text-slate-600 mx-auto" />
+                <p className="text-slate-200 font-bold text-sm">
+                  No active severe weather or flood bulletins found for {selectedLocation.city} ({selectedLocation.country}).
+                </p>
+                <p className="text-slate-400 max-w-md mx-auto text-xs">
+                  Public RSS feeds for this specific locality currently report no emergency flood warnings. You can broaden search or inspect global disaster bulletins.
+                </p>
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      setLocalCategoryFilter('ALL');
+                      setLocalNewsSearch('');
+                      fetchLocalNews(selectedLocation.region || selectedLocation.country, '', selectedLocation.country);
+                    }}
+                    className="px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-lg text-xs transition"
+                  >
+                    Search Broader {selectedLocation.country} News
+                  </button>
+                  <button
+                    onClick={() => setActiveSubTab('GLOBAL_NEWS')}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition"
+                  >
+                    Check Global Disaster Alerts
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

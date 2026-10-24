@@ -4,10 +4,14 @@ import {
   RegisteredPerson,
   CitizenRegistrationInput,
   RescuePriorityLevel,
+  CitySearchResult,
+  SharedLocationState,
 } from '../types/floodguard';
 import { evaluateRescuePriority } from '../services/priorityEngine';
 import {
   AlertCircle,
+  Search,
+  Loader2,
   AlertTriangle,
   CheckCircle,
   Compass,
@@ -34,6 +38,8 @@ interface PersonIntakeFormProps {
   onClose?: () => void;
   onOpenSmsModal?: (person: RegisteredPerson) => void;
   onNavigateToPersonMonitoring?: () => void;
+  sharedLocation?: SharedLocationState;
+  onUpdateSharedLocation?: (loc: SharedLocationState) => void;
 }
 
 const COMMON_PRESET_LOCATIONS: Array<{ name: string; lat: number; lng: number; risk: string }> = [
@@ -61,6 +67,8 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
   onClose,
   onOpenSmsModal,
   onNavigateToPersonMonitoring,
+  sharedLocation,
+  onUpdateSharedLocation,
 }) => {
   const [name, setName] = useState('');
   const [age, setAge] = useState<number | ''>('');
@@ -69,8 +77,23 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [addressLandmark, setAddressLandmark] = useState('');
-  const [lat, setLat] = useState<number>(currentGps?.[0] || 13.1120);
-  const [lng, setLng] = useState<number>(currentGps?.[1] || 80.1030);
+  const [locationQuery, setLocationQuery] = useState(sharedLocation?.placeName || '');
+  const [locationName, setLocationName] = useState(sharedLocation?.placeName || '');
+  const [country, setCountry] = useState(sharedLocation?.country || 'India');
+  const [administrativeRegion, setAdministrativeRegion] = useState(sharedLocation?.administrativeRegion || '');
+  const [countryCode, setCountryCode] = useState(sharedLocation?.countryCode || 'IN');
+  const [isCoordinateResolved, setIsCoordinateResolved] = useState(true);
+  const [locationSuggestions, setLocationSuggestions] = useState<CitySearchResult[]>([]);
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+  const [locationSearchError, setLocationSearchError] = useState<string | null>(null);
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+
+  const [lat, setLat] = useState<number>(sharedLocation?.latitude || currentGps?.[0] || 13.1120);
+  const [lng, setLng] = useState<number>(sharedLocation?.longitude || currentGps?.[1] || 80.1030);
+
+  const geocodeCacheRef = useRef<Map<string, CitySearchResult[]>>(new Map());
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [currentWaterDepthCm, setCurrentWaterDepthCm] = useState<number>(15);
   const [assistanceType, setAssistanceType] = useState<
     'RESCUE_BOAT' | 'MEDICAL_EVAC' | 'SHELTER_ROUTING' | 'SUPPLIES' | 'GENERAL_ADVICE'
@@ -89,7 +112,133 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
   const miniMapInstanceRef = useRef<L.Map | null>(null);
   const miniMarkerRef = useRef<L.Marker | null>(null);
 
-  // Initialize interactive mini-map preview for GPS pin placement
+  // Close geocoding dropdown on outside click
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowLocationDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  // Debounced Open-Meteo worldwide geocoding resolution
+  useEffect(() => {
+    const query = locationQuery.trim();
+    if (!query || query.length < 2) {
+      setLocationSuggestions([]);
+      setIsSearchingLocation(false);
+      setLocationSearchError(null);
+      return;
+    }
+
+    if (searchAbortRef.current) {
+      searchAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
+    const cacheKey = query.toLowerCase();
+    if (geocodeCacheRef.current.has(cacheKey)) {
+      setLocationSuggestions(geocodeCacheRef.current.get(cacheKey)!);
+      setIsSearchingLocation(false);
+      setLocationSearchError(null);
+      setShowLocationDropdown(true);
+      return;
+    }
+
+    setIsSearchingLocation(true);
+    setLocationSearchError(null);
+
+    const timer = setTimeout(async () => {
+      try {
+        let results: CitySearchResult[] = [];
+        // Tier 1: Try backend geocoding endpoint
+        try {
+          const res = await fetch(`/api/weather/search?q=${encodeURIComponent(query)}`, {
+            signal: controller.signal,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.results)) {
+              results = data.results;
+            }
+          }
+        } catch (e: any) {
+          if (e.name === 'AbortError') return;
+        }
+
+        // Tier 2: Direct Open-Meteo Geocoding API fallback (zero-cost, CORS enabled)
+        if (results.length === 0 && !controller.signal.aborted) {
+          try {
+            const directUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=10&language=en&format=json`;
+            const directRes = await fetch(directUrl, { signal: controller.signal });
+            if (directRes.ok) {
+              const data = await directRes.json();
+              if (data && Array.isArray(data.results)) {
+                results = data.results.map((r: any) => ({
+                  id: r.id,
+                  name: r.name,
+                  latitude: r.latitude,
+                  longitude: r.longitude,
+                  country: r.country || '',
+                  countryCode: r.country_code || '',
+                  admin1: r.admin1 || r.admin2 || '',
+                  timezone: r.timezone || '',
+                }));
+              }
+            }
+          } catch (directErr: any) {
+            if (directErr.name === 'AbortError') return;
+          }
+        }
+
+        if (!controller.signal.aborted) {
+          geocodeCacheRef.current.set(cacheKey, results);
+          setLocationSuggestions(results);
+          setIsSearchingLocation(false);
+          setShowLocationDropdown(true);
+          if (results.length === 0) {
+            setLocationSearchError(`No locations found matching "${query}". Try another city, town, or locality name.`);
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          setIsSearchingLocation(false);
+          setLocationSearchError('Geocoding service unavailable. You can pinpoint location on the interactive map.');
+        }
+      }
+    }, 350);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [locationQuery]);
+
+  const handleSelectSuggestion = (item: CitySearchResult) => {
+    setLocationName(item.name);
+    setCountry(item.country || 'India');
+    setAdministrativeRegion(item.admin1 || '');
+    setCountryCode(item.countryCode || '');
+    const cleanLat = Number(item.latitude.toFixed(4));
+    const cleanLng = Number(item.longitude.toFixed(4));
+    setLat(cleanLat);
+    setLng(cleanLng);
+    setLocationQuery(`${item.name}${item.admin1 ? ', ' + item.admin1 : ''}, ${item.country}`);
+    setIsCoordinateResolved(true);
+    setShowLocationDropdown(false);
+    setLocationSearchError(null);
+  };
+
+  const handleLocationInputChange = (val: string) => {
+    setLocationQuery(val);
+    // Invalidate previous coordinates when the location input changes
+    setIsCoordinateResolved(false);
+  };
+
+    // Initialize interactive mini-map preview for GPS pin placement
   useEffect(() => {
     if (!miniMapContainerRef.current || miniMapInstanceRef.current) return;
 
@@ -177,17 +326,29 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setLat(pos.coords.latitude);
-          setLng(pos.coords.longitude);
+          const gLat = Number(pos.coords.latitude.toFixed(4));
+          const gLng = Number(pos.coords.longitude.toFixed(4));
+          setLat(gLat);
+          setLng(gLng);
+          setLocationQuery('Current Device GPS Location');
+          setLocationName('Device GPS Vicinity');
+          setIsCoordinateResolved(true);
+          setShowLocationDropdown(false);
         },
         () => {
           setLat(currentGps[0]);
           setLng(currentGps[1]);
+          setLocationQuery('Current Device GPS Location');
+          setLocationName('Device GPS Vicinity');
+          setIsCoordinateResolved(true);
         }
       );
     } else {
       setLat(currentGps[0]);
       setLng(currentGps[1]);
+      setLocationQuery('Current Device GPS Location');
+      setLocationName('Device GPS Vicinity');
+      setIsCoordinateResolved(true);
     }
   };
 
@@ -195,6 +356,13 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
     setLat(preset.lat);
     setLng(preset.lng);
     setAddressLandmark(preset.name);
+    setLocationQuery(preset.name);
+    setLocationName(preset.name.split(' (')[0]);
+    setCountry('India');
+    setAdministrativeRegion('Tamil Nadu');
+    setCountryCode('IN');
+    setIsCoordinateResolved(true);
+    setShowLocationDropdown(false);
   };
 
   const handleLoadSample = (sampleType: 'diabetic' | 'family') => {
@@ -250,8 +418,14 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
     setIsSubmitting(true);
 
     const safeContact = contactNumber.trim() || '+91 98400 00000';
-    const parsedLat = !isNaN(Number(lat)) ? Number(lat) : 13.1120;
-    const parsedLng = !isNaN(Number(lng)) ? Number(lng) : 80.1030;
+    const parsedLat = Number(lat);
+    const parsedLng = Number(lng);
+
+    if (isNaN(parsedLat) || isNaN(parsedLng) || parsedLat < -90 || parsedLat > 90 || parsedLng < -180 || parsedLng > 180) {
+      setErrorMessage('Coordinates out of range: Latitude must be -90 to +90 and Longitude -180 to +180.');
+      setIsSubmitting(false);
+      return;
+    }
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const localPersonId = `P-${Date.now().toString().slice(-4)}`;
     const localWearableId = `WB-${Math.floor(200 + Math.random() * 800)}`;
@@ -269,7 +443,11 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
       contactNumber: safeContact,
       emergencyContactName: emergencyContactName.trim() || '',
       emergencyContactPhone: emergencyContactPhone.trim() || '',
-      addressLandmark: addressLandmark.trim() || 'Avadi Hydrological Basin',
+      addressLandmark: addressLandmark.trim() || locationName || 'Avadi Hydrological Basin',
+      locationName: locationName || addressLandmark.trim() || 'Avadi Hydrological Basin',
+      country: country || 'India',
+      administrativeRegion: administrativeRegion || '',
+      countryCode: countryCode || '',
       lat: parsedLat,
       lng: parsedLng,
       locationTimestamp: nowStr,
@@ -337,7 +515,11 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
       contactNumber: safeContact,
       emergencyContactName: emergencyContactName.trim(),
       emergencyContactPhone: emergencyContactPhone.trim(),
-      addressLandmark: addressLandmark.trim() || 'Avadi Hydrological Basin',
+      addressLandmark: addressLandmark.trim() || locationName || 'Avadi Hydrological Basin',
+      locationName: locationName || addressLandmark.trim() || 'Avadi Hydrological Basin',
+      country: country || 'India',
+      administrativeRegion: administrativeRegion || '',
+      countryCode: countryCode || '',
       lat: parsedLat,
       lng: parsedLng,
       currentWaterDepthCm: waterDepth,
@@ -389,6 +571,17 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
 
     setRegisteredSuccess(finalPerson);
     onPersonRegistered(finalPerson, autoShowOnMap);
+    if (onUpdateSharedLocation && locationName) {
+      onUpdateSharedLocation({
+        placeName: locationName,
+        administrativeRegion: administrativeRegion || '',
+        country: country || 'India',
+        countryCode: countryCode || '',
+        latitude: parsedLat,
+        longitude: parsedLng,
+        locationSource: 'REGISTRATION',
+      });
+    }
 
     // 4. If requested, send welcome SMS
     if (sendWelcomeSms && safeContact) {
@@ -674,12 +867,12 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Location & GPS Coordinates */}
+          {/* Section 2: Location & GPS Coordinates (Worldwide Open-Meteo Geocoding) */}
           <div className="space-y-3 pt-2 border-t border-slate-800/80">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-cyan-400" />
-                2. Location Coordinates & Street Landmark
+                2. Location Coordinates & Place Gazette
               </h3>
               <button
                 type="button"
@@ -691,9 +884,106 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
               </button>
             </div>
 
+            {/* Worldwide Geocoding Search Bar with Autocomplete Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs text-slate-300 font-medium">
+                  Search City, Locality, or Town (Worldwide Geocoding)
+                </label>
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                  isCoordinateResolved
+                    ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+                    : 'text-amber-300 bg-amber-500/10 border-amber-500/30'
+                }`}>
+                  {isCoordinateResolved ? '✓ Coordinates Verified' : '⚠ Action Needed: Select a result'}
+                </span>
+              </div>
+              <div className="relative flex items-center">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="e.g. Chennai, London, Tokyo, New York, Avadi, Paruthipattu..."
+                  value={locationQuery}
+                  onChange={(e) => handleLocationInputChange(e.target.value)}
+                  onFocus={() => {
+                    if (locationSuggestions.length > 0 || locationSearchError) {
+                      setShowLocationDropdown(true);
+                    }
+                  }}
+                  className={`w-full bg-slate-950 border rounded-xl pl-9 pr-9 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none transition ${
+                    isCoordinateResolved
+                      ? 'border-emerald-500/50 focus:border-emerald-400'
+                      : 'border-amber-500/50 focus:border-amber-400'
+                  }`}
+                />
+                {isSearchingLocation ? (
+                  <Loader2 className="w-4 h-4 text-cyan-400 animate-spin absolute right-3" />
+                ) : locationQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocationQuery('');
+                      setLocationSuggestions([]);
+                      setIsCoordinateResolved(false);
+                    }}
+                    className="absolute right-3 text-slate-500 hover:text-slate-300"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                ) : null}
+              </div>
+
+              {/* Suggestions Dropdown */}
+              {showLocationDropdown && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                  {isSearchingLocation && locationSuggestions.length === 0 && (
+                    <div className="p-3 text-xs text-slate-400 flex items-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+                      Searching worldwide locations via Open-Meteo...
+                    </div>
+                  )}
+
+                  {!isSearchingLocation && locationSuggestions.length === 0 && locationSearchError && (
+                    <div className="p-3 text-xs text-amber-300 bg-amber-500/10 border-b border-slate-800">
+                      {locationSearchError}
+                    </div>
+                  )}
+
+                  {locationSuggestions.map((item) => (
+                    <button
+                      key={`${item.id}-${item.latitude}-${item.longitude}`}
+                      type="button"
+                      onClick={() => handleSelectSuggestion(item)}
+                      className="w-full px-3 py-2 text-left hover:bg-slate-800 border-b border-slate-800/60 last:border-b-0 flex items-center justify-between group transition"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm text-slate-200 font-semibold group-hover:text-cyan-300">
+                          {item.name}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {[item.admin1, item.country].filter(Boolean).join(', ')}
+                        </span>
+                      </div>
+                      <div className="text-[11px] font-mono text-slate-500 group-hover:text-cyan-400 bg-slate-950/60 px-2 py-0.5 rounded border border-slate-800">
+                        {item.latitude.toFixed(2)}°, {item.longitude.toFixed(2)}°
+                      </div>
+                    </button>
+                  ))}
+
+                  <div className="px-3 py-1.5 bg-slate-950/80 text-[10px] text-slate-500 border-t border-slate-800 flex items-center justify-between">
+                    <span>Source: Open-Meteo Free Geocoding API</span>
+                    <span>Zero-cost & keyless</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Specific Street Address / Landmark / Door Number & Flood Depth */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2">
-                <label className="block text-xs text-slate-400 mb-1">Street Address / Landmark / Neighborhood</label>
+                <label className="block text-xs text-slate-400 mb-1">
+                  Specific Street / Door No / Landmark (Optional local details)
+                </label>
                 <input
                   type="text"
                   placeholder="e.g. Paruthipattu Lake Road, Door 14/B, Near Shiva Temple"
@@ -746,28 +1036,58 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
               </div>
             </div>
 
+            {/* Coordinates Lat / Lng with Validation */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Latitude</label>
+                <label className="block text-xs text-slate-400 mb-1">
+                  Latitude (-90° to +90°)
+                </label>
                 <input
                   type="number"
                   step="0.0001"
+                  min="-90"
+                  max="90"
                   value={lat}
-                  onChange={(e) => setLat(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-400"
+                  onChange={(e) => {
+                    setLat(Number(e.target.value));
+                    setIsCoordinateResolved(true);
+                  }}
+                  className={`w-full bg-slate-950 border rounded-xl px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none ${
+                    lat < -90 || lat > 90 || isNaN(lat)
+                      ? 'border-rose-500 text-rose-300'
+                      : 'border-slate-800 focus:border-cyan-400'
+                  }`}
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Longitude</label>
+                <label className="block text-xs text-slate-400 mb-1">
+                  Longitude (-180° to +180°)
+                </label>
                 <input
                   type="number"
                   step="0.0001"
+                  min="-180"
+                  max="180"
                   value={lng}
-                  onChange={(e) => setLng(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-400"
+                  onChange={(e) => {
+                    setLng(Number(e.target.value));
+                    setIsCoordinateResolved(true);
+                  }}
+                  className={`w-full bg-slate-950 border rounded-xl px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none ${
+                    lng < -180 || lng > 180 || isNaN(lng)
+                      ? 'border-rose-500 text-rose-300'
+                      : 'border-slate-800 focus:border-cyan-400'
+                  }`}
                 />
               </div>
             </div>
+
+            {(lat < -90 || lat > 90 || lng < -180 || lng > 180 || isNaN(lat) || isNaN(lng)) && (
+              <div className="p-2 bg-rose-500/10 border border-rose-500/30 rounded-lg text-xs text-rose-300 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                Invalid coordinates range! Latitude must be -90 to +90 and Longitude -180 to +180.
+              </div>
+            )}
 
             {/* Interactive GPS Pin Mini-Map Preview */}
             <div className="space-y-1.5 pt-1">

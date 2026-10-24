@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import {
+  SharedLocationState,
   RoadSensor,
   RoadSegment,
   ReliefCentre,
@@ -35,6 +36,7 @@ import {
 } from 'lucide-react';
 
 interface RescueCommandCenterProps {
+  sharedLocation?: SharedLocationState;
   sensors: RoadSensor[];
   segments: RoadSegment[];
   reliefCentres: ReliefCentre[];
@@ -67,6 +69,7 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
   focusedPersonId,
   onNavigateToPersonMonitoring,
   onOpenSmsModal,
+  sharedLocation,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);

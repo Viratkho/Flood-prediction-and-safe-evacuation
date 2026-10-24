@@ -51,6 +51,10 @@ export interface RegisteredPerson {
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   addressLandmark?: string;
+  locationName?: string;
+  country?: string;
+  administrativeRegion?: string;
+  countryCode?: string;
   dependentsCount?: number;
   dependentsDetails?: string;
   medicalConditions?: string[];
@@ -323,6 +327,10 @@ export interface CitizenRegistrationInput {
   lat: number;
   lng: number;
   addressLandmark: string;
+  locationName?: string;
+  country?: string;
+  administrativeRegion?: string;
+  countryCode?: string;
   currentWaterDepthCm: number;
   assistanceType: 'RESCUE_BOAT' | 'MEDICAL_EVAC' | 'SHELTER_ROUTING' | 'SUPPLIES' | 'GENERAL_ADVICE';
   additionalNotes?: string;
@@ -487,5 +495,13 @@ export interface WeatherNewsArticle {
   isOfficialBulletin?: boolean;
 }
 
-
-
+export interface SharedLocationState {
+  placeName: string;
+  administrativeRegion?: string;
+  country: string;
+  countryCode?: string;
+  latitude: number;
+  longitude: number;
+  timezone?: string;
+  locationSource: 'GPS' | 'SEARCH' | 'PRESET' | 'REGISTRATION';
+}

@@ -2376,6 +2376,10 @@ app.post('/api/people', (req: Request, res: Response) => {
 
 
       addressLandmark: addressLandmark || 'Avadi / Ambattur Hydrological Basin',
+      locationName: req.body.locationName || addressLandmark || '',
+      country: req.body.country || 'India',
+      administrativeRegion: req.body.administrativeRegion || '',
+      countryCode: req.body.countryCode || '',
 
 
 
@@ -5433,11 +5437,14 @@ function detectRegion(text: string): WeatherNewsRegion {
 // 1. Current & Forecast Weather Endpoint (Open-Meteo)
 app.get('/api/weather', async (req: Request, res: Response) => {
   try {
-    const latParam = req.query.lat ? Number(req.query.lat) : 13.1143;
-    const lonParam = req.query.lon ? Number(req.query.lon) : 80.1015;
-    const cityParam = (req.query.city as string) || 'Avadi Hydrological Basin';
-    const regionParam = (req.query.region as string) || 'Tamil Nadu';
-    const countryParam = (req.query.country as string) || 'India';
+    if (req.query.lat === undefined || req.query.lon === undefined) {
+      return res.status(400).json({ error: 'Latitude (lat) and Longitude (lon) are required query parameters' });
+    }
+    const latParam = Number(req.query.lat);
+    const lonParam = Number(req.query.lon);
+    const cityParam = (req.query.city as string) || 'Selected Coordinates';
+    const regionParam = (req.query.region as string) || '';
+    const countryParam = (req.query.country as string) || '';
 
     if (isNaN(latParam) || isNaN(lonParam) || latParam < -90 || latParam > 90 || lonParam < -180 || lonParam > 180) {
       return res.status(400).json({ error: 'Invalid latitude (-90 to 90) or longitude (-180 to 180)' });
@@ -5580,7 +5587,7 @@ app.get('/api/weather/search', async (req: Request, res: Response) => {
       return res.json({ results: cached.results, isCached: true });
     }
 
-    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=en&format=json`;
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=en&format=json`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
     const response = await fetch(url, {
@@ -5618,8 +5625,12 @@ app.get('/api/weather/search', async (req: Request, res: Response) => {
 app.get('/api/weather/news/local', async (req: Request, res: Response) => {
   try {
     const query = (req.query.query as string || req.query.location as string || req.query.city as string || 'Chennai').trim();
-    const region = (req.query.region as string || 'Tamil Nadu').trim();
-    const cacheKey = `${query.toLowerCase()}_${region.toLowerCase()}`;
+    const region = (req.query.region as string || '').trim();
+    const country = (req.query.country as string || 'India').trim();
+    const countryCode = ((req.query.countryCode as string) || (country === 'India' ? 'IN' : '')).toUpperCase().trim();
+    const timezone = (req.query.timezone as string || '').trim();
+
+    const cacheKey = `${query.toLowerCase()}_${region.toLowerCase()}_${country.toLowerCase()}`;
     const now = Date.now();
     const cached = localNewsCache.get(cacheKey);
 
@@ -5628,6 +5639,8 @@ app.get('/api/weather/news/local', async (req: Request, res: Response) => {
         success: true,
         query,
         region,
+        country,
+        countryCode,
         total: cached.articles.length,
         lastUpdated: new Date(cached.timestamp).toISOString(),
         isCached: true,
@@ -5635,15 +5648,37 @@ app.get('/api/weather/news/local', async (req: Request, res: Response) => {
       });
     }
 
-    // Build targeted query for regional weather and IMD meteorological bulletins
-    const searchQuery = `${query} weather OR rainfall OR monsoon OR cyclone OR IMD`;
-    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(searchQuery)}&hl=en-IN&gl=IN&ceid=IN:en`;
+    // Determine region-appropriate Google News RSS parameters & timezone label
+    let hl = 'en-IN';
+    let gl = 'IN';
+    let ceid = 'IN:en';
+    let timezoneLabel = 'IST';
+
+    if (countryCode === 'US' || country.toLowerCase() === 'united states') {
+      hl = 'en-US'; gl = 'US'; ceid = 'US:en'; timezoneLabel = 'EST/PST';
+    } else if (countryCode === 'GB' || countryCode === 'UK' || country.toLowerCase() === 'united kingdom') {
+      hl = 'en-GB'; gl = 'GB'; ceid = 'GB:en'; timezoneLabel = 'GMT/BST';
+    } else if (countryCode === 'JP' || country.toLowerCase() === 'japan') {
+      hl = 'en'; gl = 'JP'; ceid = 'JP:en'; timezoneLabel = 'JST';
+    } else if (countryCode === 'AU' || country.toLowerCase() === 'australia') {
+      hl = 'en-AU'; gl = 'AU'; ceid = 'AU:en'; timezoneLabel = 'AEST';
+    } else if (countryCode === 'CA' || country.toLowerCase() === 'canada') {
+      hl = 'en-CA'; gl = 'CA'; ceid = 'CA:en'; timezoneLabel = 'EST';
+    } else if (countryCode) {
+      hl = 'en'; gl = countryCode; ceid = `${countryCode}:en`;
+      timezoneLabel = timezone ? (timezone.split('/')[1] || timezone).replace(/_/g, ' ') : 'UTC';
+    }
+
+    // Build targeted, multi-term query for regional weather, rain, flooding, and meteorological bulletins
+    const locationPart = [query, region, country !== 'India' ? country : ''].filter(Boolean).join(' ');
+    const searchQuery = `${locationPart} (flood OR rainfall OR "heavy rain" OR storm OR monsoon OR cyclone OR inundation OR "weather warning" OR alert)`;
+    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(searchQuery)}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'FloodGuard/2.1' },
+      headers: { 'User-Agent': 'FloodGuard/2.1 (Free Meteorological Aggregator)' },
     });
     clearTimeout(timeout);
 
@@ -5652,6 +5687,8 @@ app.get('/api/weather/news/local', async (req: Request, res: Response) => {
         return res.json({
           success: true,
           query,
+          region,
+          country,
           total: cached.articles.length,
           lastUpdated: new Date(cached.timestamp).toISOString(),
           isCached: true,
@@ -5659,13 +5696,17 @@ app.get('/api/weather/news/local', async (req: Request, res: Response) => {
           articles: cached.articles,
         });
       }
-      return res.status(502).json({ error: 'Failed to retrieve local weather RSS news' });
+      return res.status(502).json({ error: 'Failed to retrieve local weather RSS news from upstream provider' });
     }
 
     const xml = await response.text();
     const rawItems = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
-    const articles: WeatherNewsArticle[] = [];
+    const articlesWithScores: Array<{ article: WeatherNewsArticle; score: number }> = [];
     const seenTitles = new Set<string>();
+
+    const qLower = query.toLowerCase();
+    const rLower = region.toLowerCase();
+    const cLower = country.toLowerCase();
 
     for (let i = 0; i < rawItems.length; i++) {
       const item = rawItems[i];
@@ -5683,50 +5724,110 @@ app.get('/api/weather/news/local', async (req: Request, res: Response) => {
       if (seenTitles.has(normTitle)) continue;
       seenTitles.add(normTitle);
 
-      const publisher = cleanHtmlText(sourceMatch ? sourceMatch[1] : '') || 'News Bulletin';
-      const snippet = cleanHtmlText(descMatch ? descMatch[1] : '').slice(0, 220);
+      const publisher = cleanHtmlText(sourceMatch ? sourceMatch[1] : '') || 'Meteorological Bulletin';
+      const snippet = cleanHtmlText(descMatch ? descMatch[1] : '').slice(0, 240);
       const pubDateRaw = pubDateMatch ? pubDateMatch[1].trim() : '';
       const dateObj = new Date(pubDateRaw);
       const isValidDate = !isNaN(dateObj.getTime());
 
       const publishedDate = isValidDate
-        ? dateObj.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })
-        : pubDateRaw || new Date().toLocaleDateString('en-IN');
+        ? dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+        : pubDateRaw || new Date().toLocaleDateString('en-US');
 
       const publishedTime = isValidDate
-        ? dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
+        ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
         : undefined;
 
-      const isOfficial = /imd|meteorological|rmc|government|disaster management|ndma|sdma/i.test(publisher + ' ' + rawHeadline);
-      const category = categorizeWeatherHeadline(rawHeadline, snippet);
+      const isOfficial = /imd|meteorological|rmc|government|disaster management|ndma|sdma|noaa|met office|bom|cwa|jma/i.test(publisher + ' ' + rawHeadline);
+      
+      // Calculate geographic match relevance
+      const combinedText = (rawHeadline + ' ' + snippet).toLowerCase();
+      let matchScore = 10;
+      let matchedLocationLabel = query ? `${query}` : 'Regional Basin';
 
-      articles.push({
-        id: `LOC-${Date.now().toString(36)}-${i}`,
-        headline: rawHeadline,
-        publisher,
-        publishedAt: isValidDate ? dateObj.toISOString() : new Date().toISOString(),
-        publishedDate,
-        publishedTime,
-        timezoneLabel: 'IST',
-        sourceUrl: rawLink,
-        locationOrRegion: `${query} / ${region}`,
-        category,
-        region: 'LOCAL',
-        snippet,
-        isOfficialBulletin: isOfficial,
+      if (qLower && combinedText.includes(qLower)) {
+        matchScore += 80;
+        matchedLocationLabel = `${query}${region ? ' (' + region + ')' : ''}`;
+      } else if (rLower && combinedText.includes(rLower)) {
+        matchScore += 50;
+        matchedLocationLabel = `${region}, ${country}`;
+      } else if (cLower && combinedText.includes(cLower)) {
+        matchScore += 30;
+        matchedLocationLabel = country;
+      }
+
+      // Priority boost for severe water/flood hazards
+      const isFloodHazard = /flood|flash flood|inundation|submerged|deluge|waterlogged|dam spillway|breach|drown|overflow|water level/i.test(combinedText);
+      const isSevereStorm = /cyclone|hurricane|typhoon|cloudburst|heavy rain|torrential|landslide|red alert|orange alert|evacuation/i.test(combinedText);
+      if (isFloodHazard) matchScore += 35;
+      if (isSevereStorm) matchScore += 20;
+
+      // Recency boost (within 24 hours)
+      if (isValidDate && (now - dateObj.getTime() < 24 * 3600 * 1000)) {
+        matchScore += 15;
+      }
+
+      let category: WeatherNewsCategory = 'METEOROLOGY_GENERAL';
+      if (isFloodHazard) {
+        category = 'EXTREME_RAIN_FLOOD';
+      } else if (/cyclone|hurricane|typhoon/i.test(combinedText)) {
+        category = 'CYCLONES_HURRICANES';
+      } else if (/heatwave|drought|temperature/i.test(combinedText)) {
+        category = 'HEATWAVE_DROUGHT';
+      } else if (/storm|thunderstorm|lightning|gale|wind/i.test(combinedText)) {
+        category = 'SEVERE_STORMS';
+      }
+
+      let articleRegion: WeatherNewsRegion = 'LOCAL';
+      if (countryCode === 'IN' || countryCode === 'JP' || countryCode === 'AU') {
+        articleRegion = 'ASIA_PACIFIC';
+      } else if (countryCode === 'US' || countryCode === 'CA') {
+        articleRegion = 'AMERICAS';
+      } else if (countryCode === 'GB') {
+        articleRegion = 'EUROPE';
+      }
+
+      articlesWithScores.push({
+        article: {
+          id: `LOC-${Date.now().toString(36)}-${i}`,
+          headline: rawHeadline,
+          publisher,
+          publishedAt: isValidDate ? dateObj.toISOString() : new Date().toISOString(),
+          publishedDate,
+          publishedTime,
+          timezoneLabel,
+          sourceUrl: rawLink,
+          locationOrRegion: matchedLocationLabel,
+          category,
+          region: articleRegion,
+          snippet,
+          isOfficialBulletin: isOfficial,
+        },
+        score: matchScore,
       });
 
-      if (articles.length >= 30) break;
+      if (articlesWithScores.length >= 40) break;
     }
+
+    // Sort by relevance score descending, then by recency
+    articlesWithScores.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return new Date(b.article.publishedAt).getTime() - new Date(a.article.publishedAt).getTime();
+    });
+
+    const articles: WeatherNewsArticle[] = articlesWithScores.map(item => item.article);
 
     localNewsCache.set(cacheKey, { articles, timestamp: now });
     res.json({
       success: true,
       query,
       region,
+      country,
+      countryCode,
       total: articles.length,
       lastUpdated: new Date().toISOString(),
       articles,
+      message: articles.length === 0 ? 'No location-specific flood or weather bulletins currently found for this place.' : undefined,
     });
   } catch (err: unknown) {
     console.error('Local weather news error:', err);
@@ -5734,7 +5835,6 @@ app.get('/api/weather/news/local', async (req: Request, res: Response) => {
   }
 });
 
-// 4. Global Weather News Endpoint (Public RSS Feeds)
 app.get('/api/weather/news/global', async (req: Request, res: Response) => {
   try {
     const regionFilter = (req.query.region as string || 'ALL').toUpperCase();

@@ -35,6 +35,7 @@ import {
   HealthThresholds,
   IncidentStatus,
   MobileAlertMessage,
+  SharedLocationState,
 } from './types/floodguard';
 import { DEFAULT_HEALTH_THRESHOLDS, evaluateRescuePriority } from './services/priorityEngine';
 import { voiceNav } from './services/voiceNav';
@@ -144,6 +145,65 @@ export default function App() {
   const [thresholds, setThresholds] = useState<HealthThresholds>(DEFAULT_HEALTH_THRESHOLDS);
   const [selectedFocusLocation, setSelectedFocusLocation] = useState<[number, number] | null>(null);
   const [focusedPersonId, setFocusedPersonId] = useState<string | null>(null);
+
+  // Single Source of Truth: Shared Location State across all FloodGuard modules
+  const [sharedLocation, setSharedLocation] = useState<SharedLocationState>(() => {
+    try {
+      const stored = localStorage.getItem('floodguard_shared_location');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.latitude && parsed.longitude && parsed.placeName) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not read saved shared location:', e);
+    }
+    return {
+      placeName: 'Avadi Basin, Chennai',
+      administrativeRegion: 'Tamil Nadu',
+      country: 'India',
+      countryCode: 'IN',
+      latitude: 13.1143,
+      longitude: 80.1015,
+      timezone: 'Asia/Kolkata',
+      locationSource: 'PRESET',
+    };
+  });
+
+  const handleUpdateSharedLocation = (newLoc: SharedLocationState) => {
+    if (
+      isNaN(newLoc.latitude) ||
+      isNaN(newLoc.longitude) ||
+      newLoc.latitude < -90 ||
+      newLoc.latitude > 90 ||
+      newLoc.longitude < -180 ||
+      newLoc.longitude > 180
+    ) {
+      console.error('Invalid coordinates supplied to shared location:', newLoc);
+      return;
+    }
+
+    setSharedLocation(newLoc);
+    setUserLocation([newLoc.latitude, newLoc.longitude]);
+    try {
+      localStorage.setItem('floodguard_shared_location', JSON.stringify(newLoc));
+      localStorage.setItem(
+        'floodguard_preferred_weather_location',
+        JSON.stringify({
+          lat: newLoc.latitude,
+          lon: newLoc.longitude,
+          city: newLoc.placeName,
+          region: newLoc.administrativeRegion || '',
+          country: newLoc.country,
+          countryCode: newLoc.countryCode,
+          timezone: newLoc.timezone,
+        })
+      );
+    } catch (e) {
+      console.warn('LocalStorage save error:', e);
+    }
+  };
 
   // User GPS Tracking
   const [userLocation, setUserLocation] = useState<[number, number]>([13.1090, 80.1010]);
@@ -750,6 +810,19 @@ export default function App() {
             </div>
           </div>
 
+          {/* Active Global Shared Location Pill */}
+          <button
+            onClick={() => setActiveTab('weather-news')}
+            className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 transition"
+            title="Active Global Shared Location (Click to view Weather & News)"
+          >
+            <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="font-semibold text-slate-200">{sharedLocation.placeName}</span>
+            <span className="text-[10px] text-slate-500 font-mono">
+              ({sharedLocation.latitude.toFixed(2)}°, {sharedLocation.longitude.toFixed(2)}°)
+            </span>
+          </button>
+
           {/* Dam Live Alert Capsule */}
           <div className="hidden xl:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs font-mono">
             <span
@@ -1160,6 +1233,7 @@ export default function App() {
             people={people}
             reliefCentres={reliefCentres}
             userLocation={userLocation}
+            sharedLocation={sharedLocation}
             onOpenEvacuation={() => {
               setIsWatchGlanceMode(false);
               setActiveTab('evacuation-app');
@@ -1195,6 +1269,7 @@ export default function App() {
             focusedPersonId={focusedPersonId}
             onNavigateToPersonMonitoring={() => setActiveTab('person-monitoring')}
             onOpenSmsModal={handleOpenSmsModal}
+            sharedLocation={sharedLocation}
           />
         )}
 
@@ -1220,6 +1295,8 @@ export default function App() {
           <div className="w-full h-full p-4 sm:p-6 overflow-y-auto">
             <PersonIntakeForm
               currentGps={userLocation}
+              sharedLocation={sharedLocation}
+              onUpdateSharedLocation={handleUpdateSharedLocation}
               onPersonRegistered={(person, showOnMap = true) => {
                 handlePersonRegistered(person, showOnMap);
               }}
@@ -1257,11 +1334,16 @@ export default function App() {
             onOpenAiAssistant={() => setIsAiAssistantOpen(true)}
             onOpenOfflineManager={() => setIsOfflineManagerOpen(true)}
             isOfflineMode={isOfflineMode}
+            sharedLocation={sharedLocation}
           />
         )}
 
         {activeTab === 'weather-news' && (
-          <WeatherNewsHub userLocation={userLocation} />
+          <WeatherNewsHub
+            userLocation={userLocation}
+            sharedLocation={sharedLocation}
+            onUpdateSharedLocation={handleUpdateSharedLocation}
+          />
         )}
 
         {activeTab === 'research-simulation' && (
@@ -1353,6 +1435,8 @@ export default function App() {
           <div className="w-full max-w-4xl my-auto">
             <PersonIntakeForm
               currentGps={userLocation}
+              sharedLocation={sharedLocation}
+              onUpdateSharedLocation={handleUpdateSharedLocation}
               onPersonRegistered={(person, showOnMap = true) => {
                 handlePersonRegistered(person, showOnMap);
                 if (showOnMap) {

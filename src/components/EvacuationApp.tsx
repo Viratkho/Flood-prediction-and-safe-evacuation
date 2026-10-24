@@ -4,6 +4,7 @@ import L from 'leaflet';
 
 import {
 
+  SharedLocationState,
   RoadNode,
 
   RoadSegment,
@@ -55,6 +56,7 @@ import {
 
 
 interface EvacuationAppProps {
+  sharedLocation?: SharedLocationState;
 
   nodes: RoadNode[];
 

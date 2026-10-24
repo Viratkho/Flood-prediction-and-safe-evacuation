@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  SharedLocationState,
   DamTelemetry,
   RegisteredPerson,
   ReliefCentre,
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react';
 
 interface SmartwatchGlanceHubProps {
+  sharedLocation?: SharedLocationState;
   damTelemetry: DamTelemetry;
   people: RegisteredPerson[];
   reliefCentres: ReliefCentre[];
@@ -42,6 +44,7 @@ export const SmartwatchGlanceHub: React.FC<SmartwatchGlanceHubProps> = ({
   onOpenPersonMonitoring,
   onOpenCommandCenter,
   onSwitchToFullView,
+  sharedLocation,
 }) => {
   // Live weather state for watch
   const [weatherData, setWeatherData] = useState<LocationWeatherData | null>(null);
