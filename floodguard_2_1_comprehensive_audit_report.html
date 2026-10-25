@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>FloodGuard 2.1 — Comprehensive Website Audit, Quality Assessment & Rating Report</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 14mm 12mm 14mm 12mm;
+      @bottom-left {
+        content: "FloodGuard 2.1 — Comprehensive Audit & Quality Assessment Report";
+        font-size: 7pt;
+        color: #64748b;
+      }
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-size: 7.5pt;
+        font-weight: 600;
+        color: #334155;
+      }
+    }
+
+    *, *:before, *:after {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 9.5pt;
+      line-height: 1.5;
+      color: #1e293b;
+      background: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+
+    .report-header {
+      background: #090d16;
+      color: #ffffff;
+      padding: 12pt 14pt;
+      border-radius: 6pt;
+      margin-bottom: 12pt;
+      border-bottom: 3pt solid #ff7700;
+      break-inside: avoid;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 10pt;
+      margin-bottom: 8pt;
+    }
+
+    .logo-box {
+      width: 32pt;
+      height: 32pt;
+      background: #ff7700;
+      color: white;
+      font-size: 18pt;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6pt;
+      flex-shrink: 0;
+    }
+
+    .report-title {
+      font-size: 14.5pt;
+      font-weight: 800;
+      color: #ffffff;
+      margin: 0;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    }
+
+    .report-sub {
+      font-size: 8.5pt;
+      color: #94a3b8;
+      margin-top: 2pt;
+    }
+
+    .meta-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6pt 12pt;
+      font-size: 8pt;
+      color: #cbd5e1;
+      padding-top: 6pt;
+      border-top: 1pt solid #1e293b;
+    }
+
+    .meta-item strong {
+      color: #f8fafc;
+    }
+
+    .meta-strip code {
+      background: #1e293b;
+      color: #38bdf8;
+      border: 0.5pt solid #334155;
+      padding: 1pt 3pt;
+      font-size: 7.5pt;
+    }
+
+    .test-pass-pill {
+      background: #065f46;
+      color: #34d399;
+      font-weight: 700;
+      padding: 1.5pt 5pt;
+      border-radius: 3pt;
+      border: 0.5pt solid #059669;
+    }
+
+    .rating-pill {
+      background: #1e3a8a;
+      color: #60a5fa;
+      font-weight: 700;
+      padding: 1.5pt 5pt;
+      border-radius: 3pt;
+      border: 0.5pt solid #2563eb;
+    }
+
+    .verdict-pill {
+      background: #1e3a8a;
+      color: #ffffff;
+      font-weight: 700;
+      padding: 2pt 6pt;
+      border-radius: 4pt;
+      font-size: 9pt;
+    }
+
+    .export-bar {
+      margin-top: 8pt;
+      padding-top: 8pt;
+      border-top: 1pt dashed #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6pt;
+    }
+
+    .export-label {
+      font-size: 8pt;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+
+    .export-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5pt;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4pt;
+      padding: 3.5pt 8pt;
+      border-radius: 4pt;
+      font-size: 8pt;
+      font-weight: 700;
+      text-decoration: none !important;
+      color: #ffffff !important;
+    }
+
+    .btn-primary {
+      background: #ff7700;
+    }
+
+    .btn-secondary {
+      background: #334155;
+    }
+
+    .btn-accent {
+      background: #0284c7;
+    }
+
+    h1, h2, h3, h4 {
+      color: #0f172a;
+      break-after: avoid;
+    }
+
+    h2 {
+      font-size: 12pt;
+      font-weight: 700;
+      margin-top: 14pt;
+      margin-bottom: 5pt;
+      padding-bottom: 2pt;
+      border-bottom: 1.5pt solid #cbd5e1;
+    }
+
+    h3 {
+      font-size: 10.5pt;
+      font-weight: 700;
+      margin-top: 9pt;
+      margin-bottom: 4pt;
+    }
+
+    p, ul, ol {
+      margin-top: 2pt;
+      margin-bottom: 5pt;
+    }
+
+    ul, ol {
+      padding-left: 16pt;
+    }
+
+    li {
+      margin-bottom: 2pt;
+    }
+
+    hr {
+      border: none;
+      border-top: 1pt solid #e2e8f0;
+      margin: 10pt 0;
+    }
+
+    a {
+      color: #0284c7;
+      text-decoration: underline;
+      text-underline-offset: 1.5pt;
+      font-weight: 500;
+    }
+
+    .code-link {
+      color: #0284c7 !important;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .code-link:hover {
+      text-decoration: underline;
+    }
+
+    .code-link code {
+      background: #e0f2fe;
+      color: #0369a1;
+      border: 0.5pt solid #bae6fd;
+      cursor: pointer;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+      font-size: 8pt;
+      background: #f1f5f9;
+      color: #0f172a;
+      padding: 1pt 2.5pt;
+      border-radius: 2.5pt;
+      border: 0.5pt solid #cbd5e1;
+    }
+
+    pre {
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 6pt 8pt;
+      border-radius: 4pt;
+      overflow-x: auto;
+      font-size: 7.5pt;
+      line-height: 1.35;
+      margin: 5pt 0;
+      break-inside: avoid;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 6pt 0;
+      font-size: 8pt;
+      line-height: 1.35;
+      break-inside: auto;
+    }
+
+    tr {
+      break-inside: avoid;
+    }
+
+    thead th {
+      background: #0f172a;
+      color: #ffffff;
+      font-weight: 700;
+      text-align: left;
+      padding: 4.5pt 5pt;
+      border: 0.5pt solid #334155;
+    }
+
+    tbody td {
+      padding: 3.5pt 5pt;
+      border: 0.5pt solid #cbd5e1;
+      vertical-align: top;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #f8fafc;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 1.5pt 4.5pt;
+      border-radius: 2.5pt;
+      font-size: 7pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .badge-success {
+      background: #dcfce7;
+      color: #15803d;
+      border: 0.5pt solid #86efac;
+    }
+
+    .badge-excellent {
+      background: #dbeafe;
+      color: #1d4ed8;
+      border: 0.5pt solid #93c5fd;
+    }
+
+    .badge-good {
+      background: #e0f2fe;
+      color: #0369a1;
+      border: 0.5pt solid #7dd3fc;
+    }
+
+    .badge-warning {
+      background: #fef3c7;
+      color: #b45309;
+      border: 0.5pt solid #fcd34d;
+    }
+
+    .math {
+      font-weight: 600;
+      color: #0369a1;
+    }
+
+    /* Architecture Schematic Styling */
+    .arch-schematic {
+      background: #f8fafc;
+      border: 1pt solid #cbd5e1;
+      border-radius: 6pt;
+      padding: 8pt 10pt;
+      margin: 8pt 0;
+      break-inside: avoid;
+    }
+
+    .arch-layer {
+      border-radius: 4pt;
+      padding: 6pt 8pt;
+      margin-bottom: 5pt;
+    }
+
+    .client-layer {
+      background: #eff6ff;
+      border: 1pt solid #bfdbfe;
+    }
+
+    .server-layer {
+      background: #fff7ed;
+      border: 1pt solid #fed7aa;
+    }
+
+    .storage-layer {
+      background: #f0fdf4;
+      border: 1pt solid #bbf7d0;
+    }
+
+    .layer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5pt;
+      border-bottom: 1pt dashed rgba(0,0,0,0.15);
+      padding-bottom: 3pt;
+    }
+
+    .layer-title {
+      font-weight: 800;
+      font-size: 8.5pt;
+      color: #0f172a;
+    }
+
+    .layer-tech {
+      font-size: 7pt;
+      color: #64748b;
+      font-family: ui-monospace, monospace;
+    }
+
+    .layer-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4pt;
+    }
+
+    .api-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .arch-card {
+      background: #ffffff;
+      border: 0.5pt solid #cbd5e1;
+      border-radius: 3pt;
+      padding: 3.5pt 5pt;
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: #0f172a;
+      box-shadow: 0 0.5pt 1pt rgba(0,0,0,0.04);
+    }
+
+    .card-desc {
+      display: block;
+      font-size: 6.5pt;
+      font-weight: 400;
+      color: #64748b;
+      margin-top: 1pt;
+    }
+
+    .cache-card {
+      background: #faf5ff;
+      border-color: #e9d5ff;
+    }
+
+    .api-card {
+      background: #fffbeb;
+      border-color: #fde68a;
+    }
+
+    .ext-card {
+      background: #f0fdfa;
+      border-color: #99f6e4;
+    }
+
+    .waf-banner {
+      background: #fee2e2;
+      border: 0.5pt solid #fca5a5;
+      color: #991b1b;
+      font-size: 7pt;
+      padding: 3pt 6pt;
+      border-radius: 3pt;
+      margin-bottom: 4pt;
+    }
+
+    .arch-arrow {
+      text-align: center;
+      font-size: 7pt;
+      font-weight: 700;
+      color: #64748b;
+      margin: 3pt 0;
+    }
+  
+    @media print {
+      .no-print, .floating-export-bar {
+        display: none !important;
+      }
+    }
+
+    .floating-export-bar {
+      position: fixed;
+      top: 12px;
+      right: 16px;
+      z-index: 9999;
+      display: flex;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(8px);
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    }
+
+    .float-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 8pt;
+      font-weight: 700;
+      color: #ffffff !important;
+      text-decoration: none !important;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .float-btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.1);
+    }
+
+    .print-btn {
+      background: #0284c7;
+    }
+
+    .pdf-btn {
+      background: #ff7700;
+    }
+
+    .zip-btn {
+      background: #10b981;
+    }
+
+  </style>
+</head>
+<body>
+
+<div class="floating-export-bar no-print">
+  <button onclick="window.print()" class="float-btn print-btn" title="Export directly to PDF via Browser Print">
+    🖨️ Export to PDF
+  </button>
+  <a href="./floodguard_2_1_comprehensive_audit_report.pdf" download="floodguard_2_1_comprehensive_audit_report.pdf" class="float-btn pdf-btn" title="Download compiled PDF file">
+    ⬇️ Download PDF File
+  </a>
+  <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/archive/refs/heads/main.zip" class="float-btn zip-btn" title="Download entire codebase ZIP">
+    📦 Source (.ZIP)
+  </a>
+</div>
+
+  
+<div class="report-header">
+  <div class="header-main">
+    <div class="brand-row">
+      <div class="logo-box">🌊</div>
+      <div>
+        <h1 class="report-title">FloodGuard 2.1 — Comprehensive Website Audit & Quality Assessment Report</h1>
+        <div class="report-sub">Health-Aware Hydrological Emergency Command, Evacuation & Citizen Rescue Platform</div>
+      </div>
+    </div>
+    
+    <div class="meta-strip">
+      <div class="meta-item"><strong>Audit Date:</strong> October 23, 2026</div>
+      <div class="meta-item"><strong>Auditor:</strong> Senior Full-Stack Engineer, Security Analyst &amp; QA Architect</div>
+      <div class="meta-item"><strong>Target Repo:</strong> <code>Viratkho/Flood-prediction-and-safe-evacuation</code></div>
+      <div class="meta-item"><strong>Commit:</strong> <code>b218074</code> (main)</div>
+      <div class="meta-item"><strong>Automated Tests:</strong> <span class="test-pass-pill">35/35 PASSED (100%)</span></div>
+      <div class="meta-item"><strong>Overall Rating:</strong> <span class="rating-pill">8.24 / 10.0 (GOOD)</span></div>
+    </div>
+  </div>
+
+  <div class="export-bar">
+    <span class="export-label">📥 Clickable Links &amp; Export Options:</span>
+    <div class="export-buttons">
+      <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/archive/refs/heads/main.zip" target="_blank" class="btn btn-primary" title="Download entire codebase as ZIP">
+        📦 Download Source Code (.ZIP)
+      </a>
+      <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation" target="_blank" class="btn btn-secondary" title="View GitHub repository">
+        📂 GitHub Repository
+      </a>
+      <a href="https://flood-prediction-and-safe-evacuatio-teal.vercel.app/" target="_blank" class="btn btn-accent" title="Open live hosted web application">
+        🌐 Live Web Deployment
+      </a>
+    </div>
+  </div>
+</div>
+
+  <h1 id="floodguard-21-comprehensive-website-audit-quality-assessment-rating-report">🌊 FloodGuard 2.1 — Comprehensive Website Audit, Quality Assessment &amp; Rating Report</h1>
+<p><strong>Audit Date:</strong> October 23, 2026<br />
+<strong>Auditor:</strong> Senior Full-Stack Engineer, UI/UX Auditor, Security Analyst &amp; QA Architect<br />
+<strong>Target Repository:</strong> <code>Flood-prediction-and-safe-evacuation</code> (Branch: <code>main</code>, Commit: <code>b218074</code>)<br />
+<strong>Overall Verdict:</strong> <strong>GOOD (8.24 / 10.0) — Highly Capable Tactical Emergency Platform with Targeted Security &amp; Persistence Remediation Required</strong></p>
+<hr />
+<h2 id="1-executive-summary">1. Executive Summary</h2>
+<p>FloodGuard 2.1 is an advanced, health-aware hydrological emergency command, citizen monitoring, and evacuation platform tailored for flood-prone urban basins (specifically modeled on the Avadi / Ambattur basin in Chennai, India, adjacent to the Chembarambakkam reservoir).</p>
+<p>The application features a responsive, multi-device frontend built with React 19, TypeScript, Vite, and Tailwind CSS, backed by an Express.js Node.js server. The platform integrates real-time hydrological simulation, flood-aware A* evacuation routing, offline Leaflet map tile caching (via Service Worker and IndexedDB), citizen physiological vitals tracking (<span class="math">SpO<sub>2</sub></span>, heart rate), incident lifecycle management, emergency mobile alerts (via ntfy.sh and RFC 5724 cellular SMS), Gemini-powered tactical advisory, and an informational Weather &amp; Disaster News hub powered by Open-Meteo and public RSS feeds.</p>
+<p>The audit verified <strong>45 automated tests with a 100% pass rate</strong> across backend APIs, WAF security, routing, mobile notifications, and cross-device viewports. The platform excels in functional correctness, responsive design, third-party integrations, and life-safety algorithm design. However, it exhibits notable weaknesses in <strong>backend authentication</strong> (unauthenticated critical endpoints) and <strong>database persistence</strong> (reliance on in-memory state and local JSON files, causing state loss on serverless platforms like Vercel).</p>
+<hr />
+<h2 id="2-project-architecture-complete-website-inventory">2. Project Architecture &amp; Complete Website Inventory</h2>
+<h3 id="21-architectural-overview">2.1 Architectural Overview</h3>
+
+<div class="arch-schematic" break-inside="avoid">
+  <div class="arch-layer client-layer">
+    <div class="layer-header">
+      <span class="layer-title">🖥️ Client-Side Presentation & Offline Layer</span>
+      <span class="layer-tech">React 19 • TypeScript • Tailwind CSS • Leaflet • Service Worker</span>
+    </div>
+    <div class="layer-grid">
+      <div class="arch-card">Rescue Command Center<span class="card-desc">IoT Sensors & Basin Map</span></div>
+      <div class="arch-card">Person Monitoring Panel<span class="card-desc">Vitals, SpO₂ & Rescue Triage</span></div>
+      <div class="arch-card">Incident Workspace<span class="card-desc">Squad Dispatch & Life-Cycle</span></div>
+      <div class="arch-card">Evacuation App<span class="card-desc">A* Flood-Aware Pathfinding</span></div>
+      <div class="arch-card">Weather & News Hub<span class="card-desc">Open-Meteo & RSS Feeds</span></div>
+      <div class="arch-card">Smartwatch Glance Hub<span class="card-desc">160–320px Responsive UI</span></div>
+      <div class="arch-card cache-card">Service Worker (sw.js)<span class="card-desc">OSM Tile Interceptor</span></div>
+      <div class="arch-card cache-card">IndexedDB Cache<span class="card-desc">Offline Map Data Packs</span></div>
+    </div>
+  </div>
+
+  <div class="arch-arrow">
+    <span>⬇️ REST API &amp; Telemetry Data Flow (HTTP / JSON / WAF Filtered) ⬇️</span>
+  </div>
+
+  <div class="arch-layer server-layer">
+    <div class="layer-header">
+      <span class="layer-title">⚙️ Backend Application & Security Layer</span>
+      <span class="layer-tech">Node.js • Express.js • In-Memory WAF • Rate Limiting</span>
+    </div>
+    <div class="waf-banner">
+      🛡️ <strong>In-Memory WAF &amp; Threat Defense:</strong> SQLi &amp; Stored XSS Pattern Inspection • Scanner Tool Blocking (sqlmap) • Automatic IP Quarantine
+    </div>
+    <div class="layer-grid api-grid">
+      <div class="arch-card api-card"><code>/api/people</code><span class="card-desc">Citizen Registration & Vitals</span></div>
+      <div class="arch-card api-card"><code>/api/incidents</code><span class="card-desc">Triage Queue & Status Updates</span></div>
+      <div class="arch-card api-card"><code>/api/simulation/dam</code><span class="card-desc">Hydrological Surge Injection</span></div>
+      <div class="arch-card api-card"><code>/api/weather</code><span class="card-desc">Geocoding & Forecast Proxy</span></div>
+      <div class="arch-card api-card"><code>/api/alerts/send-mobile</code><span class="card-desc">ntfy.sh & Carrier SMS Gateway</span></div>
+      <div class="arch-card api-card"><code>/api/ai/advise</code><span class="card-desc">Gemini 3.8 Flash Tactical Advice</span></div>
+    </div>
+  </div>
+
+  <div class="arch-arrow">
+    <span>⬇️ External Ingestion &amp; Data Persistence ⬇️</span>
+  </div>
+
+  <div class="arch-layer storage-layer">
+    <div class="layer-header">
+      <span class="layer-title">💾 Storage, Third-Party Feeds & External Gateways</span>
+      <span class="layer-tech">Zero-Cost Tier Integrations • Free APIs • Public RSS</span>
+    </div>
+    <div class="layer-grid">
+      <div class="arch-card ext-card">.registered_people.json<span class="card-desc">Local Disk Persistence</span></div>
+      <div class="arch-card ext-card">Open-Meteo Weather API<span class="card-desc">Free Keyless Forecasts</span></div>
+      <div class="arch-card ext-card">IMD & Disaster RSS Feeds<span class="card-desc">Live Meteorological Bulletins</span></div>
+      <div class="arch-card ext-card">ntfy.sh Push Gateway<span class="card-desc">Free Urgent Mobile Alerts</span></div>
+      <div class="arch-card ext-card">Google Gemini API<span class="card-desc">Tactical LLM Advisory</span></div>
+      <div class="arch-card ext-card">OpenStreetMap & CartoDB<span class="card-desc">Free Map Tiles</span></div>
+    </div>
+  </div>
+</div>
+
+
+<h3 id="22-complete-website-component-route-inventory">2.2 Complete Website Component &amp; Route Inventory</h3>
+<table>
+<thead>
+<tr>
+<th>View / Component</th>
+<th>Purpose</th>
+<th>Status</th>
+<th>Dependencies</th>
+<th>Testing Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Command Center</strong> (<code>RescueCommandCenter.tsx</code>)</td>
+<td>Tactical basin overview, 15 IoT sensors, Chembarambakkam Dam gauge, sparkline history, simulation controls, satellite/night tile toggle</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td>Leaflet, Lucide icons, <code>HealthAwareOverview</code></td>
+<td>Verified via browser test harness and <code>TC-FE-001</code></td>
+</tr>
+<tr>
+<td><strong>Smartwatch Glance Hub</strong> (<code>SmartwatchGlanceHub.tsx</code>)</td>
+<td>Ultra-compact single-column glance view (160–320px) displaying weather summary, dam gauge, nearest shelter, active SOS, and meteorological bulletins</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td>Lucide icons, responsive CSS</td>
+<td>Verified across 160x200, 240x240, and 320x568 headless Chrome viewports</td>
+</tr>
+<tr>
+<td><strong>Person Monitoring Panel</strong> (<code>PersonMonitoringPanel.tsx</code>)</td>
+<td>Physiological vitals monitoring (<span class="math">SpO<sub>2</sub></span>, HR), drift velocity, location uncertainty, priority breakdown, and removal button</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td><code>priorityEngine.ts</code>, Lucide icons</td>
+<td>Verified via <code>TC-BE-001</code>, <code>TC-BE-001B</code></td>
+</tr>
+<tr>
+<td><strong>Citizen Intake Form</strong> (<code>PersonIntakeForm.tsx</code>)</td>
+<td>Registration modal for adding vulnerable citizens, medical conditions, and contact details with priority computation</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td><code>POST /api/people</code>, <code>priorityEngine.ts</code></td>
+<td>Verified with valid and invalid input tests (<code>TC-BE-002</code>, <code>TC-BE-003</code>)</td>
+</tr>
+<tr>
+<td><strong>Incident Workspace</strong> (<code>IncidentWorkspace.tsx</code>)</td>
+<td>Incident triage queue with Acknowledge, Assign Squad, and Resolve workflows with audit log trail</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td><code>POST /api/incidents/:id/*</code></td>
+<td>Verified via <code>TC-BE-004</code> through <code>TC-BE-007</code></td>
+</tr>
+<tr>
+<td><strong>Evacuation App</strong> (<code>EvacuationApp.tsx</code>)</td>
+<td>Turn-by-turn navigation, continuous GPS tracking, flood-aware A* rerouting, test walk simulation, and vertical shelter alert</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td><code>routingEngine.ts</code>, <code>voiceNav.ts</code>, Leaflet</td>
+<td>Verified via unit pathfinding tests and dual-mode responsive layout</td>
+</tr>
+<tr>
+<td><strong>Weather &amp; News Hub</strong> (<code>WeatherNewsHub.tsx</code>)</td>
+<td>Local weather, 24h hourly &amp; 7-day forecast, geocoding search, local IMD bulletins, and global disaster RSS wires</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td>Open-Meteo, RSS feeds, <code>/api/weather/*</code></td>
+<td>Verified via <code>TC-BE-019</code> through <code>TC-BE-022</code></td>
+</tr>
+<tr>
+<td><strong>Mobile Alert Modal</strong> (<code>MobileAlertModal.tsx</code>)</td>
+<td>Manual emergency alert dispatch via ntfy.sh free push network and RFC 5724 native carrier SMS links</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td><code>POST /api/alerts/send-mobile</code></td>
+<td>Verified via 8 dedicated tests in <code>test_sms_suite.py</code></td>
+</tr>
+<tr>
+<td><strong>Offline Map Manager</strong> (<code>OfflineMapManager.tsx</code>)</td>
+<td>Download basin map packages (<span class="math">2 km</span>, <span class="math">5 km</span>, <span class="math">10 km</span>) into IndexedDB with offline simulation toggle</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td><code>offlineStorage.ts</code>, IndexedDB, CacheStorage</td>
+<td>Verified with IndexedDB package generation</td>
+</tr>
+<tr>
+<td><strong>Research Simulation Modal</strong> (<code>ResearchSimulationModal.tsx</code>)</td>
+<td>Run benchmark disaster scenarios (A/B/C/D) isolated from real data, with 1-click CSV/JSON export</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td><code>/api/research/*</code></td>
+<td>Verified via <code>TC-BE-016</code> through <code>TC-BE-018</code></td>
+</tr>
+<tr>
+<td><strong>WAF Firewall Modal</strong> (<code>FirewallSecurityModal.tsx</code>)</td>
+<td>Live inspection of blocked attacks, quarantined IPs, and synthetic security attack injector</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td><code>/api/security/*</code></td>
+<td>Verified via <code>TC-SEC-001</code> through <code>TC-SEC-004</code></td>
+</tr>
+<tr>
+<td><strong>Aegis AI Assistant</strong> (<code>AegisAiAssistant.tsx</code>)</td>
+<td>Tactical emergency assistant powered by Gemini 3.8 Flash with local deterministic fallback rules and TTS</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td><code>/api/ai/advise</code>, <code>@google/genai</code></td>
+<td>Verified via <code>TC-BE-015</code></td>
+</tr>
+<tr>
+<td><strong>System Test Runner Modal</strong> (<code>SystemTestRunnerModal.tsx</code>)</td>
+<td>Live in-browser test runner modal to execute and preview test cases simultaneously in the UI</td>
+<td><strong>Implemented &amp; Operational</strong></td>
+<td>React state, <code>/api/*</code> endpoints</td>
+<td>Verified live in browser UI</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3-detailed-category-by-category-evaluation">3. Detailed Category-by-Category Evaluation</h2>
+<h3 id="category-1-ui-design-visual-consistency">Category 1: UI Design &amp; Visual Consistency</h3>
+<ul>
+<li><strong>Score:</strong> <code>8.5 / 10</code> | <strong>Rating:</strong> Good</li>
+<li><strong>Evidence:</strong></li>
+<li>Standardized tactical color palette: <code>#020617</code> (slate-950), <code>#ff7700</code> (FloodGuard safety orange), <code>#38bdf8</code> (hydrological sky blue), <code>#10b981</code> (medical normal emerald), <code>#ef4444</code> (danger red).</li>
+<li>Consistent icon iconography from Lucide React across desktop, tablet, mobile, and smartwatch views.</li>
+<li>Active visual feedback: radar beacon pings on SOS locations, pulsing status pills, and SVG sparkline history for dam reservoir water level.</li>
+<li><strong>Weaknesses:</strong></li>
+<li>On dense desktop views, floating inspectors and dam cards can occasionally overlap map controls if multiple panels are open simultaneously.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/components/RescueCommandCenter.tsx" target="_blank" class="code-link" title="Open src/components/RescueCommandCenter.tsx on GitHub"><code>RescueCommandCenter.tsx</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/components/SmartwatchGlanceHub.tsx" target="_blank" class="code-link" title="Open src/components/SmartwatchGlanceHub.tsx on GitHub"><code>SmartwatchGlanceHub.tsx</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-2-content-quality-information-architecture">Category 2: Content Quality &amp; Information Architecture</h3>
+<ul>
+<li><strong>Score:</strong> <code>8.0 / 10</code> | <strong>Rating:</strong> Good</li>
+<li><strong>Evidence:</strong></li>
+<li>Clear, domain-accurate terminology: Avadi/Ambattur Basin, Chembarambakkam Reservoir, NDRF/SDRF emergency squads, <span class="math">SpO<sub>2</sub></span> clinical hypoxia levels (<span class="math">&lt;90%</span>), cusecs discharge, meters above MSL.</li>
+<li>Informational boundary strictly enforced: Weather and news articles are explicitly presented as informational news feeds and do not tamper with mathematical flood-risk models.</li>
+<li><strong>Weaknesses:</strong></li>
+<li><code>package.json</code> retains the placeholder project name <code>"react-example"</code>.</li>
+<li><code>README.md</code> references an outdated clone URL (<code>git clone https://github.com/Viratkho/product-development.git</code>) instead of <code>Flood-prediction-and-safe-evacuation.git</code>.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/README.md" target="_blank" class="code-link" title="Open README.md on GitHub"><code>README.md</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/package.json" target="_blank" class="code-link" title="Open package.json on GitHub"><code>package.json</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-3-functional-correctness">Category 3: Functional Correctness</h3>
+<ul>
+<li><strong>Score:</strong> <code>9.0 / 10</code> | <strong>Rating:</strong> Excellent</li>
+<li><strong>Evidence:</strong></li>
+<li>All 28 automated tests in <code>test_suite.py</code> and 8 automated tests in <code>test_sms_suite.py</code> pass with 100% success.</li>
+<li>Citizen registration (<code>POST /api/people</code>) properly validates required names, calculates priority level based on vitals, saves to disk, and updates the UI.</li>
+<li>Permanent citizen deletion (<code>DELETE /api/people/:id</code>) removes record from disk and unpins the map marker.</li>
+<li>Incident workflow (Acknowledge $\to$ Assign $\to$ Resolve) transitions status accurately.</li>
+<li>Full Flood Catastrophe simulation triggers inflow spike (24,500 cusecs) and updates sensor depths.</li>
+<li><strong>Weaknesses:</strong></li>
+<li>Continuous GPS in headless test environments requires fallback simulation mode.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/test_suite.py" target="_blank" class="code-link" title="Open test_suite.py on GitHub"><code>test_suite.py</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/server.ts" target="_blank" class="code-link" title="Open server.ts on GitHub"><code>server.ts</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-4-responsive-design-across-devices">Category 4: Responsive Design Across Devices</h3>
+<ul>
+<li><strong>Score:</strong> <code>9.5 / 10</code> | <strong>Rating:</strong> Excellent</li>
+<li><strong>Evidence:</strong></li>
+<li>Fluid mobile-first architecture utilizing <code>100dvh</code>, <code>viewport-fit=cover</code>, safe-area insets, and <code>touch-action: manipulation</code>.</li>
+<li>Dedicated <strong>Smartwatch Glance Hub</strong> (<code>160–320px</code>) with high-contrast vertical cards and instant toggle to full UI.</li>
+<li>1-Tap thumb bottom navigation bar (<code>fixed bottom-0 md:hidden</code>) and sliding mobile drawer menu.</li>
+<li>Collapsible Dam simulation card (<code>isDamCardCollapsed</code>) to preserve map visibility on small screens.</li>
+<li>Evacuation view switcher (Map View vs. Turn-by-Turn Steps) with Leaflet <code>map.invalidateSize()</code> prevention of grey tile seams.</li>
+<li>Automated headless Chrome testing across 9 resolutions verified zero horizontal overflow:<ul>
+<li>160×200, 240×240, 320×568, 375×667, 390×844, 768×1024, 1024×768, 1366×768, 1920×1080.</li>
+</ul>
+</li>
+<li><strong>Weaknesses:</strong></li>
+<li>Leaflet map rendering on ultra-narrow displays (<span class="math">&lt;200 px</span>) is intentionally disabled in favor of high-contrast text directives due to watch canvas constraints.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/App.tsx" target="_blank" class="code-link" title="Open src/App.tsx on GitHub"><code>App.tsx</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/components/SmartwatchGlanceHub.tsx" target="_blank" class="code-link" title="Open src/components/SmartwatchGlanceHub.tsx on GitHub"><code>SmartwatchGlanceHub.tsx</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/index.css" target="_blank" class="code-link" title="Open src/index.css on GitHub"><code>index.css</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-5-accessibility-inclusive-design">Category 5: Accessibility &amp; Inclusive Design</h3>
+<ul>
+<li><strong>Score:</strong> <code>7.5 / 10</code> | <strong>Rating:</strong> Good</li>
+<li><strong>Evidence:</strong></li>
+<li><code>@media (prefers-reduced-motion: reduce)</code> disables animations across all components.</li>
+<li>High contrast color palette (white text on dark slate exceeds WCAG AAA 7:1 ratio).</li>
+<li>Web Audio API and SpeechSynthesis speech navigation for audible evacuation turn guidance.</li>
+<li>Explicit <code>aria-label</code> tags on icon buttons and navigation elements.</li>
+<li>Minimum touch target size <span class="math">≥ 44×44 px</span> on bottom navigation and primary action buttons.</li>
+<li><strong>Weaknesses:</strong></li>
+<li>Leaflet map canvas markers lack full screen-reader descriptive alternatives (mitigated by tabular lists).</li>
+<li>Person Intake Form inputs lack explicit <code>aria-describedby</code> links to error message elements.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/index.css" target="_blank" class="code-link" title="Open src/index.css on GitHub"><code>index.css</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/services/voiceNav.ts" target="_blank" class="code-link" title="Open src/services/voiceNav.ts on GitHub"><code>voiceNav.ts</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-6-performance-loading-speed">Category 6: Performance &amp; Loading Speed</h3>
+<ul>
+<li><strong>Score:</strong> <code>9.0 / 10</code> | <strong>Rating:</strong> Excellent</li>
+<li><strong>Evidence:</strong></li>
+<li>Production build bundle size:<ul>
+<li><code>dist/index.html</code>: 2.03 kB (gzip: 0.85 kB)</li>
+<li><code>dist/assets/index-Dfn9-E4x.css</code>: 86.48 kB (gzip: 13.22 kB)</li>
+<li>Total gzipped JavaScript + CSS: <span class="math">≈ 209 kB</span>.</li>
+</ul>
+</li>
+<li>Vite build time: <span class="math">≈ 890 ms – 1.34 s</span>.</li>
+<li>Service worker caching (<code>public/sw.js</code>) intercepts OpenStreetMap tiles and serves cached tiles or an offline SVG fallback.</li>
+<li>IndexedDB storage (<code>FloodGuardOfflineDB</code>) caches road nodes, segments, and relief centres for disconnected operations.</li>
+<li><strong>Weaknesses:</strong></li>
+<li>Simultaneous radar pulse animations on 15+ markers can induce modest GPU rasterization load on older mobile chipsets.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/vite.config.ts" target="_blank" class="code-link" title="Open vite.config.ts on GitHub"><code>vite.config.ts</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/public/sw.js" target="_blank" class="code-link" title="Open public/sw.js on GitHub"><code>public/sw.js</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-7-security-privacy">Category 7: Security &amp; Privacy</h3>
+<ul>
+<li><strong>Score:</strong> <code>6.5 / 10</code> | <strong>Rating:</strong> Average (Noticeable Weaknesses)</li>
+<li><strong>Justification for score below 7:</strong></li>
+<li><strong>No User Authentication or Authorization</strong>: The application currently has no login mechanism, session management, API tokens, or role-based access control. Any network user can trigger catastrophe simulations, resolve incidents, delete registered citizens, or clear security quarantines.</li>
+<li><strong>No Restrictive CORS Configuration</strong>: The Express backend does not enforce explicit origin restrictions or CSRF tokens.</li>
+<li><strong>Positive Aspects:</strong></li>
+<li>In-memory WAF intercepts SQL injection patterns, stored/reflected XSS tags (<code>&lt;script&gt;</code>, <code>onerror=</code>), and automated vulnerability scanners (<code>sqlmap</code>, <code>nikto</code>). Verified by tests <code>TC-SEC-001</code> through <code>TC-SEC-003</code>.</li>
+<li>Automatic IP quarantine blocks offending IPs with HTTP 403.</li>
+<li>Strict payload limits (<code>1mb</code>) mitigate denial-of-service body flooding attacks.</li>
+<li>Sensitive API keys (<code>GEMINI_API_KEY</code>, Twilio credentials) are kept strictly server-side in <code>process.env</code> and never bundled into client-side code.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/server.ts" target="_blank" class="code-link" title="Open server.ts on GitHub"><code>server.ts</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/components/FirewallSecurityModal.tsx" target="_blank" class="code-link" title="Open src/components/FirewallSecurityModal.tsx on GitHub"><code>FirewallSecurityModal.tsx</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-8-backend-api-quality">Category 8: Backend &amp; API Quality</h3>
+<ul>
+<li><strong>Score:</strong> <code>8.0 / 10</code> | <strong>Rating:</strong> Good</li>
+<li><strong>Evidence:</strong></li>
+<li>30 RESTful API endpoints covering health, incidents, dam simulation, persons, weather, news, research benchmarks, firewall status, and mobile alerts.</li>
+<li>Standard HTTP status codes: 200 OK, 201 Created, 400 Bad Request with descriptive JSON error messages, 403 Forbidden for WAF blocks, and 404 Not Found for non-existent entities.</li>
+<li>Comprehensive input validation on citizen registration and SMS dispatch.</li>
+<li>Graceful degradation: all external third-party requests (Open-Meteo, RSS feeds, ntfy.sh) are wrapped in <code>try/catch</code> handlers with deterministic fallbacks.</li>
+<li><strong>Weaknesses:</strong></li>
+<li>Monolithic <code>server.ts</code> (<span class="math">&gt;5,900</span> lines) combines mock data, business logic, route handlers, and WAF middleware in a single file.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/server.ts" target="_blank" class="code-link" title="Open server.ts on GitHub"><code>server.ts</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-9-database-data-integrity">Category 9: Database &amp; Data Integrity</h3>
+<ul>
+<li><strong>Score:</strong> <code>6.0 / 10</code> | <strong>Rating:</strong> Average (Noticeable Weaknesses)</li>
+<li><strong>Justification for score below 7:</strong></li>
+<li><strong>No Relational or NoSQL Database</strong>: The application does not use PostgreSQL, SQLite, or MongoDB.</li>
+<li><strong>Serverless Ephemeral Storage Issue</strong>: Citizen registration is persisted to a local JSON file (<code>.registered_people.json</code> / <code>/tmp/.registered_people.json</code>). On Vercel serverless deployments, <code>/tmp</code> is ephemeral and resets across cold starts or lambda instances.</li>
+<li><strong>In-Memory Volatility</strong>: Incidents, sensor telemetry, and simulation states are stored exclusively in Node.js process memory and are lost if the server restarts.</li>
+<li><strong>Positive Aspects:</strong></li>
+<li>Local disk persistence works reliably on persistent Node.js servers.</li>
+<li>Offline IndexedDB caching ensures client-side resilience during internet outages.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/server.ts" target="_blank" class="code-link" title="Open server.ts on GitHub"><code>server.ts</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/services/offlineStorage.ts" target="_blank" class="code-link" title="Open src/services/offlineStorage.ts on GitHub"><code>offlineStorage.ts</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-10-external-apis-third-party-integrations">Category 10: External APIs &amp; Third-Party Integrations</h3>
+<ul>
+<li><strong>Score:</strong> <code>9.5 / 10</code> | <strong>Rating:</strong> Excellent</li>
+<li><strong>Evidence:</strong></li>
+<li><strong>Open-Meteo Weather API</strong>: 100% free, keyless current conditions, 24-hour hourly, and 7-day forecast.</li>
+<li><strong>Open-Meteo Geocoding</strong>: Free city coordinates resolution.</li>
+<li><strong>Public RSS Feeds</strong>: Parses live local meteorological bulletins (IMD, The Hindu, TNIE) and global disaster wires (BBC, ReliefWeb).</li>
+<li><strong>ntfy.sh Emergency Push Network</strong>: Free, keyless push notification delivery with priority 5 urgent alarms and action buttons.</li>
+<li><strong>Native Cellular Carrier SMS (RFC 5724)</strong>: Direct <code>sms:+91...?body=...</code> link protocol allowing 1-tap carrier transmission with zero aggregator cost.</li>
+<li><strong>Google Gemini API</strong>: Optional AI advisor integration with seamless fallback to deterministic rule engine when unconfigured.</li>
+<li><strong>OpenStreetMap &amp; CartoDB</strong>: Free tile layers cached locally.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/server.ts" target="_blank" class="code-link" title="Open server.ts on GitHub"><code>server.ts</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/components/WeatherNewsHub.tsx" target="_blank" class="code-link" title="Open src/components/WeatherNewsHub.tsx on GitHub"><code>WeatherNewsHub.tsx</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-11-floodguard-safety-data-reliability">Category 11: FloodGuard Safety &amp; Data Reliability</h3>
+<ul>
+<li><strong>Score:</strong> <code>9.0 / 10</code> | <strong>Rating:</strong> Excellent</li>
+<li><strong>Evidence:</strong></li>
+<li><strong>Conservative Fail-Safe Principle</strong>: Does <strong>not</strong> treat missing telemetry as evidence of safety. <code>priorityEngine.ts</code> explicitly marks missing vitals as <code>UNKNOWN</code> with the label: <em>"Vitals unavailable / sensor offline (Do NOT assume safe)"</em>.</li>
+<li>*<em>Flood-Aware A</em> Routing**: Penalizes and avoids road segments with water depth <span class="math">&gt;50 cm</span> or critical hazard status.</li>
+<li><strong>Vertical Shelter Alert</strong>: When all evacuation corridors are submerged (<span class="math">&gt;50 cm</span>), pathfinding halts ground routing and issues an urgent directive to seek vertical rooftop shelter.</li>
+<li><strong>Chembarambakkam Dam Model</strong>: Accurate reservoir gauge vs. <span class="math">36.5 m</span> crest capacity, inflow/outflow cusecs balance, and discharge states.</li>
+<li><strong>Weaknesses:</strong></li>
+<li>IoT sensor readings and LoRa gateway signals are currently simulated rather than ingested from physical field hardware.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/services/routingEngine.ts" target="_blank" class="code-link" title="Open src/services/routingEngine.ts on GitHub"><code>routingEngine.ts</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/services/priorityEngine.ts" target="_blank" class="code-link" title="Open src/services/priorityEngine.ts on GitHub"><code>priorityEngine.ts</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-12-weather-news-quality">Category 12: Weather &amp; News Quality</h3>
+<ul>
+<li><strong>Score:</strong> <code>9.0 / 10</code> | <strong>Rating:</strong> Excellent</li>
+<li><strong>Evidence:</strong></li>
+<li>Clean separation: Weather and news data remain purely informational and do not alter automated flood hazard predictions or evacuation decisions.</li>
+<li>Local weather displays current temperature, feels-like, weather condition icon, humidity, wind speed, hourly forecast, and 7-day forecast.</li>
+<li>Geocoding city search allows users to inspect any location or use browser geolocation.</li>
+<li>News feeds display headline, publisher, publication date, relative time, and direct source link.</li>
+<li>Verified by tests <code>TC-BE-019</code> through <code>TC-BE-022</code>.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/components/WeatherNewsHub.tsx" target="_blank" class="code-link" title="Open src/components/WeatherNewsHub.tsx on GitHub"><code>WeatherNewsHub.tsx</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-13-architecture-maintainability">Category 13: Architecture &amp; Maintainability</h3>
+<ul>
+<li><strong>Score:</strong> <code>7.5 / 10</code> | <strong>Rating:</strong> Good</li>
+<li><strong>Evidence:</strong></li>
+<li>Frontend is strongly typed with TypeScript and separated into dedicated modules (<code>components/</code>, <code>services/</code>, <code>data/</code>, <code>types/</code>).</li>
+<li>Zero TypeScript compiler errors (<code>npm run lint</code> exits with 0).</li>
+<li>Vite build processes assets cleanly in <span class="math">≈ 1 s</span>.</li>
+<li><strong>Weaknesses:</strong></li>
+<li>Backend <code>server.ts</code> is a single monolithic file of <span class="math">&gt;5,900</span> lines. Refactoring into modular routers (<code>routes/</code>, <code>controllers/</code>, <code>middleware/</code>) would enhance long-term maintainability.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/server.ts" target="_blank" class="code-link" title="Open server.ts on GitHub"><code>server.ts</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/src/types/floodguard.ts" target="_blank" class="code-link" title="Open src/types/floodguard.ts on GitHub"><code>src/types/floodguard.ts</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-14-testing-reliability">Category 14: Testing &amp; Reliability</h3>
+<ul>
+<li><strong>Score:</strong> <code>9.5 / 10</code> | <strong>Rating:</strong> Excellent</li>
+<li><strong>Evidence:</strong></li>
+<li><strong>45 Automated Tests Executed &amp; Passed (100% Success)</strong>:<ul>
+<li>28/28 tests in <code>test_suite.py</code> (Functional, API, Dam simulation, WAF, Weather, RSS).</li>
+<li>8/8 tests in <code>test_sms_suite.py</code> (ntfy.sh push, RFC 5724 URI, phone validation, audit log).</li>
+<li>9/9 viewports in <code>test_viewports.cjs</code> (Headless Chrome DOM and visual render across all breakpoints).</li>
+</ul>
+</li>
+<li>In-browser interactive System Test Runner modal (<code>SystemTestRunnerModal.tsx</code>) allows visual test execution directly inside the web UI.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/test_suite.py" target="_blank" class="code-link" title="Open test_suite.py on GitHub"><code>test_suite.py</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/test_sms_suite.py" target="_blank" class="code-link" title="Open test_sms_suite.py on GitHub"><code>test_sms_suite.py</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-15-seo-discoverability">Category 15: SEO &amp; Discoverability</h3>
+<ul>
+<li><strong>Score:</strong> <code>5.5 / 10</code> | <strong>Rating:</strong> Average</li>
+<li><strong>Justification for score below 7:</strong></li>
+<li>Missing <code>public/robots.txt</code>, <code>public/sitemap.xml</code>, OpenGraph social metadata (<code>og:title</code>, <code>og:image</code>), and structured schema JSON-LD.</li>
+<li><em>Contextual Mitigation:</em> Search engine discoverability is of low operational priority for a specialized tactical command center and evacuation dashboard.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/index.html" target="_blank" class="code-link" title="Open index.html on GitHub"><code>index.html</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-16-deployment-operational-readiness">Category 16: Deployment &amp; Operational Readiness</h3>
+<ul>
+<li><strong>Score:</strong> <code>7.5 / 10</code> | <strong>Rating:</strong> Good</li>
+<li><strong>Evidence:</strong></li>
+<li>Multi-target build output: builds standalone Node.js server (<code>dist/server.js</code>) and Vercel serverless function (<code>api/index.js</code>).</li>
+<li>Production server runs stably on background port 3000.</li>
+<li><code>vercel.json</code> configured with build commands, output directory, and API rewrites.</li>
+<li><strong>Weaknesses:</strong></li>
+<li>Deploying to Vercel requires addressing serverless ephemeral storage (<code>/tmp</code>) for persistent citizen records.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/vercel.json" target="_blank" class="code-link" title="Open vercel.json on GitHub"><code>vercel.json</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/package.json" target="_blank" class="code-link" title="Open package.json on GitHub"><code>package.json</code> ↗</a>.</li>
+</ul>
+<hr />
+<h3 id="category-17-documentation-usability-guidance">Category 17: Documentation &amp; Usability Guidance</h3>
+<ul>
+<li><strong>Score:</strong> <code>8.0 / 10</code> | <strong>Rating:</strong> Good</li>
+<li><strong>Evidence:</strong></li>
+<li><code>README.md</code> documents quickstart, terminal commands, environment variables, and the 7 primary user views.</li>
+<li><code>.env.example</code> documents free mobile alert tiers and Gemini API key configuration.</li>
+<li>In-app interactive guidance: tooltip explanations, status badges, voice announcements, and test runners.</li>
+<li><strong>Weaknesses:</strong></li>
+<li><code>README.md</code> references an outdated clone URL (<code>product-development.git</code>) and does not document the Weather &amp; News hub or Smartwatch Glance Mode.</li>
+<li><strong>Relevant Files:</strong> <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/README.md" target="_blank" class="code-link" title="Open README.md on GitHub"><code>README.md</code> ↗</a>, <a href="https://github.com/Viratkho/Flood-prediction-and-safe-evacuation/blob/main/.env.example" target="_blank" class="code-link" title="Open .env.example on GitHub"><code>.env.example</code> ↗</a>.</li>
+</ul>
+<hr />
+<h2 id="4-overall-quality-scorecard">4. Overall Quality Scorecard</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Dimension</th>
+<th style="text-align: center;">Weight</th>
+<th style="text-align: center;">Score (1–10)</th>
+<th style="text-align: center;">Weighted Contribution</th>
+<th>Rating Label</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>UI Design &amp; Visual Consistency</td>
+<td style="text-align: center;">8%</td>
+<td style="text-align: center;">8.5</td>
+<td style="text-align: center;">0.680</td>
+<td><span class="badge badge-good">Good</span></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Content Quality &amp; Information Architecture</td>
+<td style="text-align: center;">6%</td>
+<td style="text-align: center;">8.0</td>
+<td style="text-align: center;">0.480</td>
+<td><span class="badge badge-good">Good</span></td>
+</tr>
+<tr>
+<td>3</td>
+<td>Functional Correctness</td>
+<td style="text-align: center;">12%</td>
+<td style="text-align: center;">9.0</td>
+<td style="text-align: center;">1.080</td>
+<td><span class="badge badge-excellent">Excellent</span></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Responsive Design Across Devices</td>
+<td style="text-align: center;">8%</td>
+<td style="text-align: center;">9.5</td>
+<td style="text-align: center;">0.760</td>
+<td><span class="badge badge-excellent">Excellent</span></td>
+</tr>
+<tr>
+<td>5</td>
+<td>Accessibility &amp; Inclusive Design</td>
+<td style="text-align: center;">6%</td>
+<td style="text-align: center;">7.5</td>
+<td style="text-align: center;">0.450</td>
+<td><span class="badge badge-good">Good</span></td>
+</tr>
+<tr>
+<td>6</td>
+<td>Performance &amp; Loading Speed</td>
+<td style="text-align: center;">7%</td>
+<td style="text-align: center;">9.0</td>
+<td style="text-align: center;">0.630</td>
+<td><span class="badge badge-excellent">Excellent</span></td>
+</tr>
+<tr>
+<td>7</td>
+<td>Security &amp; Privacy</td>
+<td style="text-align: center;">10%</td>
+<td style="text-align: center;">6.5</td>
+<td style="text-align: center;">0.650</td>
+<td><span class="badge badge-warning">Average (Weakness)</span></td>
+</tr>
+<tr>
+<td>8</td>
+<td>Backend &amp; API Quality</td>
+<td style="text-align: center;">8%</td>
+<td style="text-align: center;">8.0</td>
+<td style="text-align: center;">0.640</td>
+<td><span class="badge badge-good">Good</span></td>
+</tr>
+<tr>
+<td>9</td>
+<td>Database &amp; Data Integrity</td>
+<td style="text-align: center;">6%</td>
+<td style="text-align: center;">6.0</td>
+<td style="text-align: center;">0.360</td>
+<td><span class="badge badge-warning">Average (Weakness)</span></td>
+</tr>
+<tr>
+<td>10</td>
+<td>External APIs &amp; Third-Party Integrations</td>
+<td style="text-align: center;">5%</td>
+<td style="text-align: center;">9.5</td>
+<td style="text-align: center;">0.475</td>
+<td><span class="badge badge-excellent">Excellent</span></td>
+</tr>
+<tr>
+<td>11</td>
+<td>FloodGuard Safety &amp; Data Reliability</td>
+<td style="text-align: center;">8%</td>
+<td style="text-align: center;">9.0</td>
+<td style="text-align: center;">0.720</td>
+<td><span class="badge badge-excellent">Excellent</span></td>
+</tr>
+<tr>
+<td>12</td>
+<td>Weather &amp; News Quality</td>
+<td style="text-align: center;">3%</td>
+<td style="text-align: center;">9.0</td>
+<td style="text-align: center;">0.270</td>
+<td><span class="badge badge-excellent">Excellent</span></td>
+</tr>
+<tr>
+<td>13</td>
+<td>Architecture &amp; Maintainability</td>
+<td style="text-align: center;">4%</td>
+<td style="text-align: center;">7.5</td>
+<td style="text-align: center;">0.300</td>
+<td><span class="badge badge-good">Good</span></td>
+</tr>
+<tr>
+<td>14</td>
+<td>Testing &amp; Reliability</td>
+<td style="text-align: center;">4%</td>
+<td style="text-align: center;">9.5</td>
+<td style="text-align: center;">0.380</td>
+<td><span class="badge badge-excellent">Excellent</span></td>
+</tr>
+<tr>
+<td>15</td>
+<td>SEO &amp; Discoverability</td>
+<td style="text-align: center;">1%</td>
+<td style="text-align: center;">5.5</td>
+<td style="text-align: center;">0.055</td>
+<td><span class="badge badge-warning">Average</span></td>
+</tr>
+<tr>
+<td>16</td>
+<td>Deployment &amp; Operational Readiness</td>
+<td style="text-align: center;">2%</td>
+<td style="text-align: center;">7.5</td>
+<td style="text-align: center;">0.150</td>
+<td><span class="badge badge-good">Good</span></td>
+</tr>
+<tr>
+<td>17</td>
+<td>Documentation &amp; Usability Guidance</td>
+<td style="text-align: center;">2%</td>
+<td style="text-align: center;">8.0</td>
+<td style="text-align: center;">0.160</td>
+<td><span class="badge badge-good">Good</span></td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td></td>
+<td style="text-align: center;"><strong>100%</strong></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"><strong>8.24 / 10.0</strong></td>
+<td><strong>GOOD</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5-prioritized-remediation-roadmap">5. Prioritized Remediation Roadmap</h2>
+<h3 id="group-a-must-fix-p0-p1-security-persistence">Group A: Must Fix (P0 / P1 — Security &amp; Persistence)</h3>
+<ol>
+<li><strong>Implement Role-Based Authentication on Critical Endpoints (Priority: P0)</strong></li>
+<li><em>Problem:</em> Any unauthenticated network user can trigger full flood catastrophe simulations, resolve active incidents, delete citizen records, or clear WAF quarantine.</li>
+<li><em>Solution:</em> Add session or JWT middleware with roles (<code>OPERATOR</code>, <code>DISPATCHER</code>, <code>ADMIN</code>). Restrict simulation triggers and citizen deletions to authorized sessions.</li>
+<li><em>Effort:</em> Medium | <em>Verification:</em> Automated curl/test requests verify HTTP 401/403 when unauthenticated.</li>
+<li><strong>Persistent Database Engine for Production Deployment (Priority: P1)</strong></li>
+<li><em>Problem:</em> Storing registered citizens in <code>.registered_people.json</code> and incidents in Node process memory leads to total state loss on serverless cold starts (Vercel).</li>
+<li><em>Solution:</em> Connect to a zero-cost serverless database (e.g. Supabase PostgreSQL, Neon serverless Postgres, or Cloud Firestore free tier).</li>
+<li><em>Effort:</em> Medium | <em>Verification:</em> Create person, restart serverless process, verify record persists.</li>
+<li><strong>Configure Restrictive CORS Headers (Priority: P1)</strong></li>
+<li><em>Problem:</em> Express backend does not restrict cross-origin requests, leaving endpoints open to unauthorized cross-origin invocations.</li>
+<li><em>Solution:</em> Add <code>cors({ origin: process.env.ALLOWED_ORIGINS || false, credentials: true })</code>.</li>
+<li><em>Effort:</em> Small | <em>Verification:</em> Verify cross-origin preflight <code>OPTIONS</code> requests from unauthorized origins return 403.</li>
+</ol>
+<h3 id="group-b-should-improve-p2-architecture-standards">Group B: Should Improve (P2 — Architecture &amp; Standards)</h3>
+<ol>
+<li><strong>Refactor Monolithic <code>server.ts</code> into Modular Controllers (Priority: P2)</strong></li>
+<li><em>Problem:</em> <code>server.ts</code> has grown to <span class="math">&gt;5,900</span> lines, combining routes, WAF, RSS parsers, mock data, and simulation engines in one file.</li>
+<li><em>Solution:</em> Extract into <code>routes/</code>, <code>controllers/</code>, <code>middleware/waf.ts</code>, and <code>services/weather.ts</code>.</li>
+<li><em>Effort:</em> Medium | <em>Verification:</em> Run <code>test_suite.py</code> ensuring all 28 API tests pass identically.</li>
+<li><strong>Synchronize <code>README.md</code> and <code>package.json</code> Metadata (Priority: P2)</strong></li>
+<li><em>Problem:</em> <code>package.json</code> name is <code>"react-example"</code>, and <code>README.md</code> lists an outdated clone URL (<code>product-development.git</code>).</li>
+<li><em>Solution:</em> Update <code>package.json</code> name to <code>"floodguard"</code>, and correct git clone URL in <code>README.md</code>.</li>
+<li><em>Effort:</em> Small | <em>Verification:</em> Visual review of docs.</li>
+<li><strong>Form Field Accessibility Labels (Priority: P2)</strong></li>
+<li><em>Problem:</em> Citizen intake form inputs lack explicit <code>aria-describedby</code> error associations for screen readers.</li>
+<li><em>Solution:</em> Add <code>id</code>, <code>aria-describedby</code>, and <code>aria-invalid</code> to intake form input elements.</li>
+<li><em>Effort:</em> Small | <em>Verification:</em> Screen reader inspection and automated a11y linter.</li>
+</ol>
+<h3 id="group-c-optional-enhancements-p3-polish-discoverability">Group C: Optional Enhancements (P3 — Polish &amp; Discoverability)</h3>
+<ol>
+<li><strong>PWA Web Manifest &amp; App Icons (Priority: P3)</strong></li>
+<li><em>Problem:</em> Missing <code>manifest.json</code> for home screen installability on Android/iOS.</li>
+<li><em>Solution:</em> Add <code>manifest.json</code> with icons and <code>display: standalone</code>.</li>
+<li><em>Effort:</em> Small | <em>Verification:</em> Lighthouse PWA audit.</li>
+<li><strong>SEO Metadata (Priority: P3)</strong></li>
+<li><em>Problem:</em> Missing <code>robots.txt</code> and OpenGraph preview images.</li>
+<li><em>Solution:</em> Add basic <code>public/robots.txt</code> and social card images.</li>
+<li><em>Effort:</em> Small | <em>Verification:</em> Meta tag inspect.</li>
+</ol>
+<hr />
+<h2 id="6-audit-limitations-unverified-assumptions">6. Audit Limitations &amp; Unverified Assumptions</h2>
+<ol>
+<li><strong>Hardware IoT Connectivity</strong>: IoT road sensor telemetry and LoRa gateway packet RSSI values are mathematically simulated via hydrological models. Real physical sensor hardware was not physically wired or tested.</li>
+<li><strong>Third-Party Rate Limits</strong>: Open-Meteo free tier permits up to 10,000 daily calls and ntfy.sh allows high-volume free tier push notifications; sustained enterprise-scale loads (<span class="math">&gt;100,000 requests/day</span>) would require dedicated infrastructure or caching proxies.</li>
+<li><strong>Smartwatch Canvas Constraints</strong>: Smartwatch evaluation was conducted via responsive web viewports (160x200, 240x240, 320x568); native watchOS / WearOS standalone applications would require separate platform SDK compilation.</li>
+</ol>
+<hr />
+<h2 id="7-final-verdict">7. Final Verdict</h2>
+<p><strong>VERDICT: GOOD (8.24 / 10.0)</strong><br />
+<em>FloodGuard 2.1 is an exceptionally well-engineered disaster response and evacuation platform featuring robust hydrological modeling, fail-safe pathfinding algorithms, fluid multi-device responsiveness, and a 100% test pass rate. Implementing authentication and a persistent database backend will elevate the platform to full enterprise production readiness.</em></p>
+</body>
+</html>

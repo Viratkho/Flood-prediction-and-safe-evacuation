@@ -1,0 +1,835 @@
+{
+  "people": [
+    {
+      "personId": "P-101",
+      "wearableId": "WR-701",
+      "name": "K. Ramanathan & Family",
+      "age": 44,
+      "gender": "Male",
+      "contactNumber": "+91 94441 20192",
+      "medicalNotes": "Family of 4, 1 diabetic adult, 2 minor children",
+      "role": "CITIZEN",
+      "lat": 13.104,
+      "lng": 80.108,
+      "locationTimestamp": "1 min ago",
+      "gpsAccuracyM": 6.2,
+      "elevationM": 5.4,
+      "heartRateBpm": 124,
+      "spo2Percent": 96,
+      "healthTimestamp": "30s ago",
+      "healthDataValidity": "VALID",
+      "heartRateHistory": [
+        {
+          "timestamp": "10m ago",
+          "value": 92
+        },
+        {
+          "timestamp": "8m ago",
+          "value": 104
+        },
+        {
+          "timestamp": "6m ago",
+          "value": 112
+        },
+        {
+          "timestamp": "4m ago",
+          "value": 120
+        },
+        {
+          "timestamp": "2m ago",
+          "value": 124
+        },
+        {
+          "timestamp": "Just now",
+          "value": 124
+        }
+      ],
+      "spo2History": [
+        {
+          "timestamp": "10m ago",
+          "value": 98
+        },
+        {
+          "timestamp": "8m ago",
+          "value": 97
+        },
+        {
+          "timestamp": "6m ago",
+          "value": 97
+        },
+        {
+          "timestamp": "4m ago",
+          "value": 96
+        },
+        {
+          "timestamp": "2m ago",
+          "value": 96
+        },
+        {
+          "timestamp": "Just now",
+          "value": 96
+        }
+      ],
+      "floodDepthCm": 56,
+      "floodRiskLevel": "CRITICAL",
+      "driftStatus": "STATIONARY",
+      "driftConfidence": 94,
+      "driftVelocityMs": 0.1,
+      "sosActive": true,
+      "rescuePriority": "P0",
+      "priorityReason": "MANDATORY OVERRIDE: Active SOS Beacon Transmitted by Wearable (WR-701) in Impassable Flood Zone (56cm)",
+      "priorityFactors": {
+        "sosActive": true,
+        "sosReason": "Explicit SOS triggered from wearable panic button",
+        "healthSeverity": "WARNING",
+        "healthReason": "Elevated Heart Rate (124 BPM)",
+        "floodExposure": "CRITICAL",
+        "floodReason": "Impassable Water Depth (56cm)",
+        "driftEvidence": "NONE",
+        "driftReason": "Stationary position confirmed",
+        "dataQuality": "FRESH",
+        "gpsAccuracyM": 6.2,
+        "isImmediateDangerOverride": true,
+        "overrideReason": "Explicit SOS Beacon active in 56cm floodwater"
+      },
+      "priorityUpdatedAt": "2026-10-25T14:47:33.263Z",
+      "priorityHistory": [
+        {
+          "timestamp": "12m ago",
+          "from": "P3",
+          "to": "P2",
+          "reason": "Water depth rose to 35cm"
+        },
+        {
+          "timestamp": "4m ago",
+          "from": "P2",
+          "to": "P0",
+          "reason": "SOS trigger activated by citizen"
+        }
+      ],
+      "commStatus": "ONLINE",
+      "lastCommunicationTime": "12s ago",
+      "batteryPercent": 48,
+      "incidentId": "INC-2026-001",
+      "assignedResponderId": "WR-RESPONDER-01",
+      "assignedResponderName": "NDRF Rescue Boat Team 3"
+    },
+    {
+      "personId": "P-102",
+      "wearableId": "WR-702",
+      "name": "Mrs. Vasanthi",
+      "age": 72,
+      "gender": "Female",
+      "contactNumber": "+91 98402 11980",
+      "medicalNotes": "Severe COPD, hypertensive, mobility impaired",
+      "role": "CITIZEN",
+      "lat": 13.097,
+      "lng": 80.115,
+      "locationTimestamp": "2 mins ago",
+      "gpsAccuracyM": 8.5,
+      "elevationM": 6.1,
+      "heartRateBpm": 138,
+      "spo2Percent": 86,
+      "healthTimestamp": "1 min ago",
+      "healthDataValidity": "VALID",
+      "heartRateHistory": [
+        {
+          "timestamp": "10m ago",
+          "value": 110
+        },
+        {
+          "timestamp": "8m ago",
+          "value": 118
+        },
+        {
+          "timestamp": "6m ago",
+          "value": 126
+        },
+        {
+          "timestamp": "4m ago",
+          "value": 134
+        },
+        {
+          "timestamp": "2m ago",
+          "value": 138
+        },
+        {
+          "timestamp": "Just now",
+          "value": 138
+        }
+      ],
+      "spo2History": [
+        {
+          "timestamp": "10m ago",
+          "value": 92
+        },
+        {
+          "timestamp": "8m ago",
+          "value": 90
+        },
+        {
+          "timestamp": "6m ago",
+          "value": 89
+        },
+        {
+          "timestamp": "4m ago",
+          "value": 87
+        },
+        {
+          "timestamp": "2m ago",
+          "value": 86
+        },
+        {
+          "timestamp": "Just now",
+          "value": 86
+        }
+      ],
+      "floodDepthCm": 38,
+      "floodRiskLevel": "WARNING",
+      "driftStatus": "STATIONARY",
+      "driftConfidence": 88,
+      "driftVelocityMs": 0.05,
+      "sosActive": false,
+      "rescuePriority": "P0",
+      "priorityReason": "IMMEDIATE DANGER: Severe physiological collapse (Severe Hypoxia SpO₂ 86%, Tachycardia 138 BPM) in hazardous flood zone (38cm)",
+      "priorityFactors": {
+        "sosActive": false,
+        "healthSeverity": "CRITICAL",
+        "healthReason": "Severe Hypoxia (SpO₂ 86% < 90%), Severe Tachycardia (138 BPM)",
+        "floodExposure": "WARNING",
+        "floodReason": "High Flood Exposure (38cm)",
+        "driftEvidence": "NONE",
+        "driftReason": "Stationary position confirmed",
+        "dataQuality": "FRESH",
+        "gpsAccuracyM": 8.5,
+        "isImmediateDangerOverride": true,
+        "overrideReason": "Respiratory failure SpO₂ 86% in 38cm flood"
+      },
+      "priorityUpdatedAt": "2026-10-25T14:47:33.265Z",
+      "priorityHistory": [
+        {
+          "timestamp": "15m ago",
+          "from": "P3",
+          "to": "P2",
+          "reason": "Rising flood depth at Kamarajar Bridge"
+        },
+        {
+          "timestamp": "6m ago",
+          "from": "P2",
+          "to": "P0",
+          "reason": "SpO₂ dropped below critical threshold (86%)"
+        }
+      ],
+      "commStatus": "ONLINE",
+      "lastCommunicationTime": "45s ago",
+      "batteryPercent": 72,
+      "incidentId": "INC-2026-002",
+      "assignedResponderId": "WR-RESPONDER-02",
+      "assignedResponderName": "Fire & Rescue Tactical Unit Alpha"
+    },
+    {
+      "personId": "P-103",
+      "wearableId": "WR-703",
+      "name": "S. Karthik (Drifting in Current)",
+      "age": 19,
+      "gender": "Male",
+      "contactNumber": "+91 98840 99420",
+      "medicalNotes": "Swept from culvert crossing while attempting road transit",
+      "role": "CITIZEN",
+      "lat": 13.089,
+      "lng": 80.1105,
+      "locationTimestamp": "10s ago",
+      "gpsAccuracyM": 14,
+      "elevationM": 4.8,
+      "heartRateBpm": 148,
+      "spo2Percent": 91,
+      "healthTimestamp": "10s ago",
+      "healthDataValidity": "VALID",
+      "heartRateHistory": [
+        {
+          "timestamp": "8m ago",
+          "value": 125
+        },
+        {
+          "timestamp": "6m ago",
+          "value": 136
+        },
+        {
+          "timestamp": "4m ago",
+          "value": 142
+        },
+        {
+          "timestamp": "2m ago",
+          "value": 146
+        },
+        {
+          "timestamp": "Just now",
+          "value": 148
+        }
+      ],
+      "spo2History": [
+        {
+          "timestamp": "8m ago",
+          "value": 95
+        },
+        {
+          "timestamp": "6m ago",
+          "value": 94
+        },
+        {
+          "timestamp": "4m ago",
+          "value": 92
+        },
+        {
+          "timestamp": "2m ago",
+          "value": 91
+        },
+        {
+          "timestamp": "Just now",
+          "value": 91
+        }
+      ],
+      "floodDepthCm": 64,
+      "floodRiskLevel": "CRITICAL",
+      "driftStatus": "DRIFTING",
+      "driftConfidence": 96,
+      "driftVelocityMs": 1.9,
+      "sosActive": false,
+      "rescuePriority": "P0",
+      "priorityReason": "IMMEDIATE DANGER: Confirmed active water drift (1.9 m/s, 96% confidence) in deep Kovur culvert surge (64cm)",
+      "priorityFactors": {
+        "sosActive": false,
+        "healthSeverity": "CRITICAL",
+        "healthReason": "Severe Tachycardia (148 BPM), Hypoxia (91%)",
+        "floodExposure": "CRITICAL",
+        "floodReason": "Impassable Water Depth (64cm)",
+        "driftEvidence": "CONFIRMED",
+        "driftReason": "Active downstream drift detected along river tributary",
+        "dataQuality": "FRESH",
+        "gpsAccuracyM": 14,
+        "isImmediateDangerOverride": true,
+        "overrideReason": "Victim being swept downstream by water velocity"
+      },
+      "priorityUpdatedAt": "2026-10-25T14:47:33.265Z",
+      "priorityHistory": [
+        {
+          "timestamp": "5m ago",
+          "from": "P2",
+          "to": "P0",
+          "reason": "High velocity drift telemetry confirmed"
+        }
+      ],
+      "commStatus": "ONLINE",
+      "lastCommunicationTime": "8s ago",
+      "batteryPercent": 64,
+      "incidentId": "INC-2026-003"
+    },
+    {
+      "personId": "P-104",
+      "wearableId": "WR-704",
+      "name": "M. Anand",
+      "age": 38,
+      "gender": "Male",
+      "contactNumber": "+91 97910 44521",
+      "medicalNotes": "No prior medical conditions",
+      "role": "CITIZEN",
+      "lat": 13.111,
+      "lng": 80.136,
+      "locationTimestamp": "4 mins ago",
+      "gpsAccuracyM": 5,
+      "elevationM": 9.8,
+      "heartRateBpm": 88,
+      "spo2Percent": 98,
+      "healthTimestamp": "3 mins ago",
+      "healthDataValidity": "VALID",
+      "heartRateHistory": [
+        {
+          "timestamp": "8m ago",
+          "value": 84
+        },
+        {
+          "timestamp": "4m ago",
+          "value": 86
+        },
+        {
+          "timestamp": "Just now",
+          "value": 88
+        }
+      ],
+      "spo2History": [
+        {
+          "timestamp": "8m ago",
+          "value": 98
+        },
+        {
+          "timestamp": "4m ago",
+          "value": 98
+        },
+        {
+          "timestamp": "Just now",
+          "value": 98
+        }
+      ],
+      "floodDepthCm": 22,
+      "floodRiskLevel": "CAUTION",
+      "driftStatus": "STATIONARY",
+      "driftConfidence": 90,
+      "driftVelocityMs": 0,
+      "sosActive": false,
+      "rescuePriority": "P3",
+      "priorityReason": "Moderate Rescue Priority: Moderate Flood Exposure (22cm) • Monitoring required",
+      "priorityFactors": {
+        "sosActive": false,
+        "healthSeverity": "NORMAL",
+        "healthReason": "Vitals Stable: HR 88 BPM, SpO₂ 98%",
+        "floodExposure": "CAUTION",
+        "floodReason": "Moderate Flood Exposure (22cm)",
+        "driftEvidence": "NONE",
+        "driftReason": "Stationary position confirmed",
+        "dataQuality": "FRESH",
+        "gpsAccuracyM": 5,
+        "isImmediateDangerOverride": false
+      },
+      "priorityUpdatedAt": "2026-10-25T14:47:33.265Z",
+      "priorityHistory": [],
+      "commStatus": "ONLINE",
+      "lastCommunicationTime": "3 mins ago",
+      "batteryPercent": 88
+    },
+    {
+      "personId": "P-105",
+      "wearableId": "WR-705",
+      "name": "Deepa Narayanan (Offline Telemetry)",
+      "age": 51,
+      "gender": "Female",
+      "contactNumber": "+91 94450 33810",
+      "medicalNotes": "Asthmatic, inhaler dependent",
+      "role": "CITIZEN",
+      "lat": 13.1045,
+      "lng": 80.1275,
+      "locationTimestamp": "18 mins ago",
+      "gpsAccuracyM": 42,
+      "elevationM": 8.2,
+      "heartRateBpm": null,
+      "spo2Percent": null,
+      "healthTimestamp": null,
+      "healthDataValidity": "UNKNOWN",
+      "heartRateHistory": [],
+      "spo2History": [],
+      "floodDepthCm": 32,
+      "floodRiskLevel": "WARNING",
+      "driftStatus": "UNKNOWN",
+      "driftConfidence": 0,
+      "driftVelocityMs": 0,
+      "sosActive": false,
+      "rescuePriority": "P2",
+      "priorityReason": "High Rescue Priority: High Flood Exposure (32cm) • Device Offline / Unknown Vitals (Priority Not Lowered)",
+      "priorityFactors": {
+        "sosActive": false,
+        "healthSeverity": "UNKNOWN",
+        "healthReason": "Vitals unavailable / sensor offline (Do NOT assume safe)",
+        "floodExposure": "WARNING",
+        "floodReason": "High Flood Exposure (32cm)",
+        "driftEvidence": "NONE",
+        "driftReason": "Drift status unverified due to telemetry gaps",
+        "dataQuality": "OFFLINE",
+        "gpsAccuracyM": 42,
+        "isImmediateDangerOverride": false
+      },
+      "priorityUpdatedAt": "2026-10-25T14:47:33.265Z",
+      "priorityHistory": [
+        {
+          "timestamp": "18m ago",
+          "from": "P3",
+          "to": "P2",
+          "reason": "Device communication lost in warning flood zone"
+        }
+      ],
+      "commStatus": "UNREACHABLE",
+      "lastCommunicationTime": "18 mins ago",
+      "batteryPercent": 14,
+      "incidentId": "INC-2026-004"
+    },
+    {
+      "personId": "P-106",
+      "wearableId": "WR-706",
+      "name": "Sundaram P.",
+      "age": 64,
+      "gender": "Male",
+      "contactNumber": "+91 98410 77123",
+      "medicalNotes": "Safe on elevated ridge sanctuary",
+      "role": "CITIZEN",
+      "lat": 13.133,
+      "lng": 80.124,
+      "locationTimestamp": "1 min ago",
+      "gpsAccuracyM": 4.2,
+      "elevationM": 23.5,
+      "heartRateBpm": 72,
+      "spo2Percent": 99,
+      "healthTimestamp": "1 min ago",
+      "healthDataValidity": "VALID",
+      "heartRateHistory": [
+        {
+          "timestamp": "10m ago",
+          "value": 74
+        },
+        {
+          "timestamp": "5m ago",
+          "value": 72
+        },
+        {
+          "timestamp": "Just now",
+          "value": 72
+        }
+      ],
+      "spo2History": [
+        {
+          "timestamp": "10m ago",
+          "value": 99
+        },
+        {
+          "timestamp": "5m ago",
+          "value": 99
+        },
+        {
+          "timestamp": "Just now",
+          "value": 99
+        }
+      ],
+      "floodDepthCm": 0,
+      "floodRiskLevel": "SAFE",
+      "driftStatus": "STATIONARY",
+      "driftConfidence": 100,
+      "driftVelocityMs": 0,
+      "sosActive": false,
+      "rescuePriority": "P4",
+      "priorityReason": "Routine Monitoring: Stable vitals at safe location (23.5m MSL Safe Elevation)",
+      "priorityFactors": {
+        "sosActive": false,
+        "healthSeverity": "NORMAL",
+        "healthReason": "Vitals Stable: HR 72 BPM, SpO₂ 99%",
+        "floodExposure": "SAFE",
+        "floodReason": "Dry Ground / Safe Elevation",
+        "driftEvidence": "NONE",
+        "driftReason": "Stationary position confirmed",
+        "dataQuality": "FRESH",
+        "gpsAccuracyM": 4.2,
+        "isImmediateDangerOverride": false
+      },
+      "priorityUpdatedAt": "2026-10-25T14:47:33.265Z",
+      "priorityHistory": [],
+      "commStatus": "ONLINE",
+      "lastCommunicationTime": "1 min ago",
+      "batteryPercent": 95
+    },
+    {
+      "personId": "P-107",
+      "wearableId": "WR-707",
+      "name": "Ananya & Infant Child",
+      "age": 28,
+      "gender": "Female",
+      "contactNumber": "+91 99620 55190",
+      "medicalNotes": "Mother with 8-month infant, trapped on ground floor",
+      "role": "CITIZEN",
+      "lat": 13.103,
+      "lng": 80.109,
+      "locationTimestamp": "3 mins ago",
+      "gpsAccuracyM": 9.1,
+      "elevationM": 5.6,
+      "heartRateBpm": 128,
+      "spo2Percent": null,
+      "healthTimestamp": "3 mins ago",
+      "healthDataValidity": "DEGRADED",
+      "heartRateHistory": [
+        {
+          "timestamp": "8m ago",
+          "value": 114
+        },
+        {
+          "timestamp": "4m ago",
+          "value": 122
+        },
+        {
+          "timestamp": "Just now",
+          "value": 128
+        }
+      ],
+      "spo2History": [],
+      "floodDepthCm": 48,
+      "floodRiskLevel": "WARNING",
+      "driftStatus": "STATIONARY",
+      "driftConfidence": 91,
+      "driftVelocityMs": 0,
+      "sosActive": false,
+      "rescuePriority": "P1",
+      "priorityReason": "Critical Rescue Priority: High Flood Exposure (48cm) • Tachycardia (128 BPM) • Degraded SpO₂ Sensor",
+      "priorityFactors": {
+        "sosActive": false,
+        "healthSeverity": "WARNING",
+        "healthReason": "Elevated Heart Rate (128 BPM), SpO₂ Sensor Degraded",
+        "floodExposure": "WARNING",
+        "floodReason": "High Flood Exposure (48cm)",
+        "driftEvidence": "NONE",
+        "driftReason": "Stationary position confirmed",
+        "dataQuality": "FRESH",
+        "gpsAccuracyM": 9.1,
+        "isImmediateDangerOverride": false
+      },
+      "priorityUpdatedAt": "2026-10-25T14:47:33.265Z",
+      "priorityHistory": [
+        {
+          "timestamp": "10m ago",
+          "from": "P2",
+          "to": "P1",
+          "reason": "Flood depth reached 48cm with infant present"
+        }
+      ],
+      "commStatus": "ONLINE",
+      "lastCommunicationTime": "2 mins ago",
+      "batteryPercent": 52,
+      "incidentId": "INC-2026-005"
+    }
+  ],
+  "incidents": [
+    {
+      "id": "INC-2026-001",
+      "personId": "P-101",
+      "personName": "K. Ramanathan & Family",
+      "wearableId": "WR-701",
+      "priority": "P0",
+      "priorityReason": "Active SOS Beacon Triggered in 56cm floodwater near Paruthipattu low embankment",
+      "isImmediateDanger": true,
+      "status": "RESPONDER_EN_ROUTE",
+      "createdAt": "12 mins ago",
+      "acknowledgedAt": "10 mins ago",
+      "acknowledgedBy": "Commander V. Sundar (HQ Desk 1)",
+      "assignedResponderId": "WR-RESPONDER-01",
+      "assignedResponderName": "NDRF Rescue Boat Team 3",
+      "assignedAt": "8 mins ago",
+      "lat": 13.104,
+      "lng": 80.108,
+      "gpsAccuracyM": 6.2,
+      "floodDepthCm": 56,
+      "floodRiskLevel": "CRITICAL",
+      "heartRateBpm": 124,
+      "spo2Percent": 96,
+      "driftStatus": "STATIONARY",
+      "driftConfidence": 94,
+      "auditTrail": [
+        {
+          "timestamp": "12m ago",
+          "operator": "System",
+          "action": "INCIDENT_CREATED",
+          "note": "SOS Beacon received via LoRa Gateway GW-02"
+        },
+        {
+          "timestamp": "10m ago",
+          "operator": "V. Sundar",
+          "action": "ACKNOWLEDGED",
+          "note": "Contacted mobile, no voice response"
+        },
+        {
+          "timestamp": "8m ago",
+          "operator": "V. Sundar",
+          "action": "ASSIGNED",
+          "note": "Dispatched NDRF Boat Team 3 from Avadi Station"
+        }
+      ]
+    },
+    {
+      "id": "INC-2026-002",
+      "personId": "P-102",
+      "personName": "Mrs. Vasanthi",
+      "wearableId": "WR-702",
+      "priority": "P0",
+      "priorityReason": "Severe Respiratory Distress (SpO₂ 86%) with Rising Flood (38cm) at Kamarajar Bridge",
+      "isImmediateDanger": true,
+      "status": "ACKNOWLEDGED",
+      "createdAt": "6 mins ago",
+      "acknowledgedAt": "4 mins ago",
+      "acknowledgedBy": "Commander V. Sundar (HQ Desk 1)",
+      "assignedResponderId": "WR-RESPONDER-02",
+      "assignedResponderName": "Fire & Rescue Tactical Unit Alpha",
+      "assignedAt": "3 mins ago",
+      "lat": 13.097,
+      "lng": 80.115,
+      "gpsAccuracyM": 8.5,
+      "floodDepthCm": 38,
+      "floodRiskLevel": "WARNING",
+      "heartRateBpm": 138,
+      "spo2Percent": 86,
+      "driftStatus": "STATIONARY",
+      "driftConfidence": 88,
+      "auditTrail": [
+        {
+          "timestamp": "6m ago",
+          "operator": "System",
+          "action": "INCIDENT_CREATED",
+          "note": "Rule Triggered: SpO2 < 90% in flood zone"
+        },
+        {
+          "timestamp": "4m ago",
+          "operator": "V. Sundar",
+          "action": "ACKNOWLEDGED",
+          "note": "Verified COPD history with family"
+        },
+        {
+          "timestamp": "3m ago",
+          "operator": "V. Sundar",
+          "action": "ASSIGNED",
+          "note": "Tasked Tactical Unit Alpha with portable oxygen kit"
+        }
+      ]
+    },
+    {
+      "id": "INC-2026-003",
+      "personId": "P-103",
+      "personName": "S. Karthik (Drifting in Current)",
+      "wearableId": "WR-703",
+      "priority": "P0",
+      "priorityReason": "Active downstream drift (1.9 m/s) in 64cm surging Kovur culvert channel",
+      "isImmediateDanger": true,
+      "status": "NEW",
+      "createdAt": "2 mins ago",
+      "lat": 13.089,
+      "lng": 80.1105,
+      "gpsAccuracyM": 14,
+      "floodDepthCm": 64,
+      "floodRiskLevel": "CRITICAL",
+      "heartRateBpm": 148,
+      "spo2Percent": 91,
+      "driftStatus": "DRIFTING",
+      "driftConfidence": 96,
+      "auditTrail": [
+        {
+          "timestamp": "2m ago",
+          "operator": "System",
+          "action": "INCIDENT_CREATED",
+          "note": "Drift vector identified by inertial and GPS telemetry"
+        }
+      ]
+    },
+    {
+      "id": "INC-2026-004",
+      "personId": "P-105",
+      "personName": "Deepa Narayanan",
+      "wearableId": "WR-705",
+      "priority": "P2",
+      "priorityReason": "Wearable unreachable / offline for 18 mins in 32cm flood zone with poor GPS fix (±42m)",
+      "isImmediateDanger": false,
+      "status": "NEW",
+      "createdAt": "18 mins ago",
+      "lat": 13.1045,
+      "lng": 80.1275,
+      "gpsAccuracyM": 42,
+      "floodDepthCm": 32,
+      "floodRiskLevel": "WARNING",
+      "heartRateBpm": null,
+      "spo2Percent": null,
+      "driftStatus": "UNKNOWN",
+      "driftConfidence": 0,
+      "auditTrail": [
+        {
+          "timestamp": "18m ago",
+          "operator": "System",
+          "action": "INCIDENT_CREATED",
+          "note": "Device heartbeat lost in flooded sector"
+        }
+      ]
+    },
+    {
+      "id": "INC-2026-005",
+      "personId": "P-107",
+      "personName": "Ananya & Infant Child",
+      "wearableId": "WR-707",
+      "priority": "P1",
+      "priorityReason": "Infant trapped on ground floor with water level at 48cm and rising",
+      "isImmediateDanger": false,
+      "status": "NEW",
+      "createdAt": "10 mins ago",
+      "lat": 13.103,
+      "lng": 80.109,
+      "gpsAccuracyM": 9.1,
+      "floodDepthCm": 48,
+      "floodRiskLevel": "WARNING",
+      "heartRateBpm": 128,
+      "spo2Percent": null,
+      "driftStatus": "STATIONARY",
+      "driftConfidence": 91,
+      "auditTrail": [
+        {
+          "timestamp": "10m ago",
+          "operator": "System",
+          "action": "INCIDENT_CREATED",
+          "note": "Vulnerability rule: Pediatric alert flagged"
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "SCENARIO-A",
+      "name": "Scenario Alpha: Dam Spillway Surge & Water Drift",
+      "description": "Simulates sudden +50cm discharge surge resulting in active downstream victim drift and acute hypoxemic distress.",
+      "peopleCount": 7,
+      "hazardLevel": "CATASTROPHIC",
+      "simulatedConditions": {
+        "damLevelM": 37.8,
+        "precipitationMmH": 65,
+        "sosCount": 2,
+        "hypoxiaCount": 2,
+        "driftCount": 2,
+        "staleGpsCount": 1,
+        "offlineCount": 1
+      }
+    },
+    {
+      "id": "SCENARIO-B",
+      "name": "Scenario Beta: Infrastructure Degradation & Missing Data",
+      "description": "Evaluates priority preservation rules when LoRa base stations degrade and wearable telemetry becomes stale or missing.",
+      "peopleCount": 7,
+      "hazardLevel": "SEVERE",
+      "simulatedConditions": {
+        "damLevelM": 35.5,
+        "precipitationMmH": 38,
+        "sosCount": 1,
+        "hypoxiaCount": 1,
+        "driftCount": 0,
+        "staleGpsCount": 4,
+        "offlineCount": 3
+      }
+    },
+    {
+      "id": "SCENARIO-C",
+      "name": "Scenario Gamma: Multi-Victim Evacuation & Route Obstruction",
+      "description": "Tests automated dynamic rerouting under cascading road closures with multiple simultaneous P0/P1 extractions.",
+      "peopleCount": 7,
+      "hazardLevel": "SEVERE",
+      "simulatedConditions": {
+        "damLevelM": 36.2,
+        "precipitationMmH": 45,
+        "sosCount": 2,
+        "hypoxiaCount": 1,
+        "driftCount": 1,
+        "staleGpsCount": 1,
+        "offlineCount": 1
+      }
+    },
+    {
+      "id": "SCENARIO-D",
+      "name": "Scenario Delta: Baseline Low-Flow with Micro-Drift Noise",
+      "description": "Control scenario evaluating false-positive rejection when water velocities are within normal pedestrian walking ranges.",
+      "peopleCount": 7,
+      "hazardLevel": "MODERATE",
+      "simulatedConditions": {
+        "damLevelM": 32.5,
+        "precipitationMmH": 12,
+        "sosCount": 0,
+        "hypoxiaCount": 0,
+        "driftCount": 0,
+        "staleGpsCount": 0,
+        "offlineCount": 0
+      }
+    }
+  ]
+}
