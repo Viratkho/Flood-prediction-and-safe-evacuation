@@ -8,6 +8,7 @@ import {
   SharedLocationState,
 } from '../types/floodguard';
 import { evaluateRescuePriority } from '../services/priorityEngine';
+import { DeviceBQrLoginModal } from './DeviceBQrLoginModal';
 import {
   AlertCircle,
   Search,
@@ -29,6 +30,7 @@ import {
   Sparkles,
   User,
   Users,
+  QrCode,
   X,
 } from 'lucide-react';
 
@@ -70,6 +72,7 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
   sharedLocation,
   onUpdateSharedLocation,
 }) => {
+  const [isQrLoginOpen, setIsQrLoginOpen] = useState(false);
   const [name, setName] = useState('');
   const [age, setAge] = useState<number | ''>('');
   const [gender, setGender] = useState('Unspecified');
@@ -745,6 +748,34 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* QR Cross-Device Login Banner for Device B */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-sky-950/70 via-slate-900 to-slate-900 border border-sky-500/30 rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/40 flex items-center justify-center shrink-0 shadow">
+                <QrCode className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                  <span>Already registered on another device?</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-mono border border-sky-500/30">
+                    Device B Login
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Authenticate instantly using camera QR scan on your registered phone or PC.
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsQrLoginOpen(true)}
+              className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-sky-600/20 transition shrink-0 cursor-pointer active:scale-95"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>Log In with QR Code</span>
+            </button>
+          </div>
+
           {/* Quick preset loader */}
           <div className="flex items-center justify-between p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-xs">
             <span className="text-slate-400 flex items-center gap-1.5 font-medium">
@@ -1347,6 +1378,16 @@ export const PersonIntakeForm: React.FC<PersonIntakeFormProps> = ({
           </div>
         </form>
       )}
+      {/* Device B QR Login Modal */}
+      <DeviceBQrLoginModal
+        isOpen={isQrLoginOpen}
+        onClose={() => setIsQrLoginOpen(false)}
+        onLoginSuccess={(person) => {
+          setIsQrLoginOpen(false);
+          setRegisteredSuccess(person);
+          onPersonRegistered(person, true);
+        }}
+      />
     </div>
   );
 };

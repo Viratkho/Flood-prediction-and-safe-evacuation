@@ -1,7 +1,9 @@
 # FloodGuard 2.1 — Python FastAPI + SQLite Backend
 
 ## 1. Overview
-The FloodGuard 2.1 backend has been migrated to **Python FastAPI** and **SQLite**. The system runs **100% locally and completely free of charge**, with zero paid subscriptions, zero credit card requirements, and zero commercial API keys.
+The FloodGuard 2.1 backend is powered by **Python FastAPI** and **SQLite**. The system runs **100% locally and completely free of charge**, with zero paid subscriptions, zero credit card requirements, and zero commercial API keys.
+
+In addition to tactical flood prediction and safe evacuation routing, FloodGuard 2.1 features **secure QR-based cross-device authentication**, allowing a newly opened device (Device B) to log in instantly by scanning a temporary pairing QR code with an authenticated device (Device A).
 
 ---
 
@@ -19,7 +21,8 @@ backend/
 │   ├── security.py                    # WAF status, threat intelligence, clear quarantine
 │   ├── research.py                    # Scenarios catalog, execution, CSV export
 │   ├── weather.py                     # Open-Meteo proxy & Google News RSS feeds
-│   └── ai.py                          # Aegis AI emergency advisor proxy & fallback
+│   ├── ai.py                          # Aegis AI emergency advisor proxy & fallback
+│   └── auth_qr.py                     # QR cross-device authentication endpoints
 ├── data/
 │   └── floodguard.db                  # Persistent SQLite Database (WAL mode enabled)
 ├── middleware/
@@ -56,6 +59,7 @@ The database resides at `backend/data/floodguard.db` (configurable via `DATABASE
 | `experiment_logs`| `id` (AUTOINCREMENT)| Benchmark scenario execution metrics and clinical audit records |
 | `firewall_threat_logs`| `id` (TEXT) | WAF interception events (SQLi, XSS, Scanner bots, Rate limits) |
 | `quarantined_ips` | `ip` (TEXT) | Dynamic 15-minute network isolation for repeat policy violators |
+| `device_pairing_sessions` | `session_id` (TEXT) | QR pairing tokens (SHA-256), device metadata, approval/completion timestamps |
 
 **Key SQLite Configuration:**
 - Foreign Keys enforced (`PRAGMA foreign_keys = ON;`)
@@ -64,7 +68,41 @@ The database resides at `backend/data/floodguard.db` (configurable via `DATABASE
 
 ---
 
-## 4. Zero-Cost Free Integrations
+## 4. Secure QR-Based Cross-Device Authentication Workflow
+
+### Workflow Overview:
+1. **Device B (New / Unauthenticated Device)**:
+   - User clicks **"Log In with QR Code"** on the Register Intake Form or top navigation.
+   - Device B calls `POST /api/auth/qr/create`.
+   - FastAPI generates a cryptographically secure token (`secrets.token_urlsafe(32)`) and calculates its SHA-256 hash.
+   - The session is stored in SQLite with a **120-second expiration window**.
+   - Device B displays the generated high-contrast QR code and begins polling `GET /api/auth/qr/status/{session_id}` every 2 seconds.
+
+2. **Device A (Already Authenticated Device)**:
+   - User clicks **"Scan QR to Log In on Another Device"** from the top header or Smartwatch view.
+   - The device opens a camera video stream with live targeting reticle (powered by `jsqr`).
+   - Device A scans the QR code on Device B and submits `POST /api/auth/qr/scan` with the scanned token and Device A's authenticated `personId`.
+   - FastAPI verifies the token against the SQLite hash in constant time (`hmac.compare_digest`), checks expiration, associates the session with Device A's user, and returns Device B's device info (platform, browser, IP).
+   - Device A displays a confirmation prompt showing Device B's platform, browser, IP, and the account details to be authorized.
+   - User clicks **"Approve & Authorize"**, triggering `POST /api/auth/qr/approve`.
+
+3. **Automatic Login on Device B**:
+   - Device B's poll detects the `APPROVED` state.
+   - Device B calls `POST /api/auth/qr/complete` with the secret token.
+   - FastAPI atomically transitions the session to `COMPLETED` (guaranteeing single-use / preventing replay attacks) and returns the authenticated user's profile (`person`).
+   - Device B saves the user session to `localStorage`, speaks a confirmation announcement, and redirects immediately to the live Evacuation / Watch dashboard.
+
+### Security Controls:
+- **Zero Plaintext Tokens**: Tokens are hashed with SHA-256 before storage in SQLite.
+- **Constant-Time Verification**: Uses `hmac.compare_digest` to prevent timing attacks.
+- **Strict Single-Use**: Sessions can only be completed once. Replay attempts are rejected with HTTP 400.
+- **Strict Identity Derivation**: Device B cannot choose or forge user identity; user ID is strictly bound to Device A's authenticated session.
+- **Short-Lived Expiration**: Sessions automatically expire after 120 seconds.
+- **Rate Limiting**: Sliding-window rate limiters prevent brute-force attacks and session flooding.
+
+---
+
+## 5. Zero-Cost Free Integrations
 
 1. **Weather & Geocoding**:
    - Provider: **Open-Meteo** (Free open-source license, CC BY 4.0)
@@ -79,15 +117,9 @@ The database resides at `backend/data/floodguard.db` (configurable via `DATABASE
 
 ---
 
-## 5. Running the Backend on Windows
+## 6. Running the Application
 
-### Option A: Using the One-Click Script
-Double-click `backend\run_backend.bat` or run in terminal:
-```cmd
-backend\run_backend.bat
-```
-
-### Option B: Manual Terminal Execution
+### Option A: Running the Backend
 ```cmd
 # 1. Activate virtual environment
 .\.venv\Scripts\activate.bat
@@ -96,20 +128,38 @@ backend\run_backend.bat
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 3000
 ```
 
+### Option B: Building and Running the Frontend
+```cmd
+# Install dependencies
+npm install
+
+# Build production assets
+npm run build:client
+
+# Type check
+npm run lint
+```
+
 ---
 
-## 6. Running Verification Suites
+## 7. Running Verification Suites
 
-All test suites connect to `http://localhost:3000`:
+All test suites verify functionality and persistent SQLite operations:
 
 ```cmd
-# Run Comprehensive 35-Test End-to-End Suite
+# Run QR Cross-Device Authentication Test Suite (15 Tests)
+python test_qr_auth.py
+
+# Run Comprehensive End-to-End Suite (35 Tests)
 python -u test_suite.py
 
-# Run Live SMS & Mobile Gateway 8-Test Suite
+# Run Live SMS & Mobile Gateway Suite (8 Tests)
 python -u test_sms_suite.py
 ```
 
-### Results:
+### Verified Results:
+- `test_qr_auth.py`: **15/15 Passed (100% Success Rate)**
 - `test_suite.py`: **35/35 Passed (100% Success Rate)**
 - `test_sms_suite.py`: **8/8 Passed (100% Success Rate)**
+- `npm run lint` (`tsc --noEmit`): **Passed with 0 errors**
+- `npm run build:client` (`vite build`): **Passed with 0 errors**

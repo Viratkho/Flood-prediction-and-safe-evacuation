@@ -12,6 +12,8 @@ import { SmartwatchGlanceHub } from './components/SmartwatchGlanceHub';
 import { MobileAlertModal } from './components/MobileAlertModal';
 import { FirewallSecurityModal } from './components/FirewallSecurityModal';
 import { SystemTestRunnerModal } from './components/SystemTestRunnerModal';
+import { DeviceAQrScannerModal } from './components/DeviceAQrScannerModal';
+import { DeviceBQrLoginModal } from './components/DeviceBQrLoginModal';
 import {
   BASIN_CENTER,
   INITIAL_ROAD_NODES,
@@ -41,6 +43,8 @@ import { DEFAULT_HEALTH_THRESHOLDS, evaluateRescuePriority } from './services/pr
 import { voiceNav } from './services/voiceNav';
 import {
   Activity,
+  Camera,
+  QrCode,
   AlertCircle,
   AlertTriangle,
   Bot,
@@ -87,6 +91,8 @@ export default function App() {
   const [isMobileAlertModalOpen, setIsMobileAlertModalOpen] = useState(false);
   const [isFirewallModalOpen, setIsFirewallModalOpen] = useState(false);
   const [isTestRunnerOpen, setIsTestRunnerOpen] = useState(false);
+  const [isDeviceAQrModalOpen, setIsDeviceAQrModalOpen] = useState(false);
+  const [isDeviceBQrModalOpen, setIsDeviceBQrModalOpen] = useState(false);
   const [selectedAlertPerson, setSelectedAlertPerson] = useState<RegisteredPerson | null>(null);
   const [activeAdvisePerson, setActiveAdvisePerson] = useState<RegisteredPerson | null>(null);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
@@ -779,6 +785,16 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Mobile Scan QR Trigger */}
+            <button
+              onClick={() => setIsDeviceAQrModalOpen(true)}
+              className="px-2 py-1 rounded-lg bg-sky-950/80 border border-sky-600/50 text-sky-300 text-[11px] font-mono flex items-center gap-1"
+              title="Scan QR to Log In on Another Device"
+            >
+              <Camera className="w-3.5 h-3.5 text-sky-400" />
+              <span className="hidden xs:inline">Scan QR</span>
+            </button>
+
             {/* Quick Watch View Toggle Button */}
             <button
               onClick={() => setIsWatchGlanceMode(!isWatchGlanceMode)}
@@ -963,6 +979,26 @@ export default function App() {
 
         {/* Global Action Modals: Security Badge, Mobile Alert, Offline Pack & AI Assistant */}
         <div className="flex items-center gap-2">
+          {/* Device A: Scan QR to Log In on Another Device Trigger */}
+          <button
+            onClick={() => setIsDeviceAQrModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-950/70 border border-sky-500/40 text-[11px] font-mono text-sky-300 hover:bg-sky-900/60 hover:border-sky-400 transition cursor-pointer shadow-sm group active:scale-95"
+            title="Scan QR displayed on Device B to log in automatically without typing password"
+          >
+            <Camera className="w-3.5 h-3.5 text-sky-400 group-hover:scale-110 transition-transform" />
+            <span className="font-bold hidden xl:inline">LINK DEVICE:</span>
+            <span>SCAN QR</span>
+          </button>
+
+          {/* Device B: Log In with QR Code Trigger */}
+          <button
+            onClick={() => setIsDeviceBQrModalOpen(true)}
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-mono text-slate-300 hover:text-white transition cursor-pointer shadow-sm"
+            title="Show pairing QR to log in from your authenticated device"
+          >
+            <QrCode className="w-3.5 h-3.5 text-sky-400" />
+            <span>QR LOGIN</span>
+          </button>
           {/* WAF Firewall Defense Status Trigger */}
           <button
             onClick={() => setIsFirewallModalOpen(true)}
@@ -1165,6 +1201,28 @@ export default function App() {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <button
                 onClick={() => {
+                  setIsDeviceAQrModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="p-2.5 rounded-xl bg-sky-950/70 border border-sky-500/40 text-sky-300 font-bold flex items-center gap-2"
+              >
+                <Camera className="w-4 h-4 text-sky-400" />
+                <span>Scan QR (Device A)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsDeviceBQrModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 font-bold flex items-center gap-2"
+              >
+                <QrCode className="w-4 h-4 text-sky-400" />
+                <span>QR Login (Device B)</span>
+              </button>
+
+              <button
+                onClick={() => {
                   handleOpenSmsModal(people[0]);
                   setIsMobileMenuOpen(false);
                 }}
@@ -1275,6 +1333,7 @@ export default function App() {
               setActiveTab('incident-workspace');
             }}
             onSwitchToFullView={() => setIsWatchGlanceMode(false)}
+            onScanQr={() => setIsDeviceAQrModalOpen(true)}
           />
         ) : (
           <>
@@ -1541,6 +1600,26 @@ export default function App() {
           } catch {}
         }}
       />
+      {/* Device A QR Scanner Modal */}
+      {isDeviceAQrModalOpen && (
+        <DeviceAQrScannerModal
+          isOpen={isDeviceAQrModalOpen}
+          onClose={() => setIsDeviceAQrModalOpen(false)}
+          currentUser={selectedAlertPerson || people.find((p) => p.isUserRegistered) || people[0]}
+        />
+      )}
+
+      {/* Device B QR Login Modal */}
+      {isDeviceBQrModalOpen && (
+        <DeviceBQrLoginModal
+          isOpen={isDeviceBQrModalOpen}
+          onClose={() => setIsDeviceBQrModalOpen(false)}
+          onLoginSuccess={(person) => {
+            setIsDeviceBQrModalOpen(false);
+            handlePersonRegistered(person, true);
+          }}
+        />
+      )}
     </div>
   );
 }

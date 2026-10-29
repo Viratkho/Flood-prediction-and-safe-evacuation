@@ -447,9 +447,31 @@ def init_db():
             """
         )
 
+        # 8. QR-Based Device Pairing Sessions Table
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS device_pairing_sessions (
+                session_id TEXT PRIMARY KEY,
+                token_hash TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                user_id TEXT,
+                source_device_info TEXT,
+                target_device_info TEXT,
+                scanned_at TEXT,
+                approved_at TEXT,
+                completed_at TEXT,
+                FOREIGN KEY (user_id) REFERENCES people(person_id) ON DELETE SET NULL
+            );
+            """
+        )
+
         # Indexes for fast lookup
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_people_priority ON people(rescue_priority);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_incidents_priority ON incidents(priority);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pairing_status ON device_pairing_sessions(status);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pairing_expires ON device_pairing_sessions(expires_at);")
 
         seed_initial_data(conn, force=False)

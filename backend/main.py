@@ -28,6 +28,7 @@ from backend.api.security import router as security_router
 from backend.api.research import router as research_router
 from backend.api.weather import router as weather_router
 from backend.api.ai import router as ai_router
+from backend.api.auth_qr import router as auth_qr_router
 
 async def simulation_ticker():
     while True:
@@ -82,6 +83,7 @@ app.include_router(security_router)
 app.include_router(research_router)
 app.include_router(weather_router)
 app.include_router(ai_router)
+app.include_router(auth_qr_router)
 
 # 4. Static frontend asset delivery & SPA fallback
 DIST_DIR = Path(__file__).resolve().parent.parent / "dist"

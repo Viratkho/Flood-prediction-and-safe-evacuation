@@ -19,6 +19,7 @@ import {
   Waves,
   AlertTriangle,
   Maximize2,
+  Camera,
 } from 'lucide-react';
 
 export interface SmartwatchGlanceHubProps {
@@ -36,6 +37,7 @@ export interface SmartwatchGlanceHubProps {
   onNavigateToWaterStagnation: () => void;
   onNavigateToSos: () => void;
   onSwitchToFullView: () => void;
+  onScanQr?: () => void;
   // Optional legacy props for backwards compatibility
   onOpenEvacuation?: () => void;
   onOpenWeatherNews?: () => void;
@@ -56,6 +58,7 @@ export const SmartwatchGlanceHub: React.FC<SmartwatchGlanceHubProps> = ({
   onNavigateToWaterStagnation,
   onNavigateToSos,
   onSwitchToFullView,
+  onScanQr,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -218,14 +221,27 @@ export const SmartwatchGlanceHub: React.FC<SmartwatchGlanceHubProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={onSwitchToFullView}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {onScanQr && (
+            <button
+              onClick={onScanQr}
+              className="px-2 py-1 rounded-lg bg-sky-950/80 hover:bg-sky-900 text-sky-300 border border-sky-600/50 text-[10px] font-bold flex items-center gap-1 shrink-0 transition cursor-pointer"
+              title="Scan QR to Log In on Another Device"
+            >
+              <Camera className="w-3 h-3 text-sky-400" />
+              <span>Scan QR</span>
+            </button>
+          )}
+
+          <button
+            onClick={onSwitchToFullView}
           className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 text-[10px] font-bold flex items-center gap-1 shrink-0 transition"
           title="Switch to full dashboard layout"
         >
           <Maximize2 className="w-3 h-3" />
           <span>Full UI</span>
         </button>
+        </div>
       </div>
 
       {/* 2. Evacuation Map (Occupies Main Visual Area) */}
