@@ -379,6 +379,7 @@ def seed_initial_data(conn: sqlite3.Connection, force: bool = False):
         )
 
 
+
 def init_db():
     """
     Initializes the SQLite schema with foreign keys, WAL journaling, and indexes.
@@ -738,6 +739,9 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_locations_name ON locations(location_name);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_flood_alerts_active ON flood_alerts(is_active);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_flood_alerts_created ON flood_alerts(created_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_sessions_token ON admin_sessions(session_token);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_people_priority ON people(rescue_priority);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_incidents_priority ON incidents(priority);")

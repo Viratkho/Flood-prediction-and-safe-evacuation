@@ -41,6 +41,9 @@ import {
   ChevronRight,
   Eye,
   Activity,
+  ShieldAlert,
+  Trash2,
+  CheckCircle,
 } from 'lucide-react';
 
 interface WeatherNewsHubProps {
@@ -278,9 +281,79 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
     return DEFAULT_LOCATION;
   });
 
-  const [activeSubTab, setActiveSubTab] = useState<'DASHBOARD' | 'WEATHER' | 'LOCAL_NEWS' | 'GLOBAL_NEWS'>('DASHBOARD');
+  const [activeSubTab, setActiveSubTab] = useState<'DASHBOARD' | 'WEATHER' | 'LOCAL_NEWS' | 'GLOBAL_NEWS' | 'HYDRO_PREDICTION'>('DASHBOARD');
 
   // Weather state
+
+  // Hydrological Prediction State & SQLite History
+  const [predPrecip, setPredPrecip] = useState(35.0);
+  const [predSat, setPredSat] = useState(80.0);
+  const [predInflow, setPredInflow] = useState(12000.0);
+  const [predElevation, setPredElevation] = useState(14.8);
+  const [predCurrentDepth, setPredCurrentDepth] = useState(8.0);
+  const [predLocationName, setPredLocationName] = useState('Avadi Catchment Basin');
+  const [predCalculating, setPredCalculating] = useState(false);
+  const [predResult, setPredResult] = useState<any>(null);
+  const [predHistory, setPredHistory] = useState<any[]>([]);
+  const [predHistoryLoading, setPredHistoryLoading] = useState(false);
+
+  const fetchPredictionHistory = async () => {
+    setPredHistoryLoading(true);
+    try {
+      const res = await fetch('/api/prediction/history?limit=25');
+      if (res.ok) {
+        const data = await res.json();
+        setPredHistory(data);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch prediction history:', e);
+    } finally {
+      setPredHistoryLoading(false);
+    }
+  };
+
+  const handleRunPrediction = async () => {
+    setPredCalculating(true);
+    try {
+      const res = await fetch('/api/prediction/flood', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          precipitation_mm_h: Number(predPrecip),
+          soil_saturation_pct: Number(predSat),
+          catchment_inflow_cusecs: Number(predInflow),
+          elevation_m: Number(predElevation),
+          current_depth_cm: Number(predCurrentDepth),
+          location_name: predLocationName || 'Local Catchment Basin',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPredResult(data);
+        fetchPredictionHistory();
+      }
+    } catch (e) {
+      console.error('Prediction calculation failed:', e);
+    } finally {
+      setPredCalculating(false);
+    }
+  };
+
+  const handleDeletePrediction = async (id: string) => {
+    try {
+      const res = await fetch(`/api/prediction/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setPredHistory((prev) => prev.filter((p) => p.id !== id));
+      }
+    } catch (e) {
+      console.error('Failed to delete prediction record:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchPredictionHistory();
+  }, []);
+
   const [weatherData, setWeatherData] = useState<LocationWeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState<string | null>(null);
@@ -918,6 +991,22 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
                 <Globe className="w-3.5 h-3.5 text-blue-400" />
                 <span>Global Weather News ({globalNews.length})</span>
               </button>
+
+              <button
+                onClick={() => {
+                  setActiveSubTab('HYDRO_PREDICTION');
+                  fetchPredictionHistory();
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  activeSubTab === 'HYDRO_PREDICTION'
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                <span>Flood Prediction & SQLite History</span>
+              </button>
+
             </div>
 
             {/* Location Selector Bar */}
@@ -1647,6 +1736,272 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
             )}
           </section>
         )}
+
+        {/* =================================================================== */}
+        {/* TAB 5: HYDROLOGICAL PREDICTION & SQLITE HISTORY                     */}
+        {/* =================================================================== */}
+        {activeSubTab === 'HYDRO_PREDICTION' && (
+          <section className="space-y-6">
+            <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-bold text-rose-400 uppercase tracking-wider px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/30">
+                      FastAPI & SQLite Hydrological Engine
+                    </span>
+                    <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                      100% Free & Open-Source
+                    </span>
+                  </div>
+                  <h2 className="text-lg font-bold text-white mt-1">Hydrological Runoff, Depth & Inundation Prediction</h2>
+                  <p className="text-xs text-slate-400">
+                    Calculates surface runoff, 6-hour predicted water depth, rate-of-rise, and ETA to critical danger thresholds using local catchment variables.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleRunPrediction}
+                  disabled={predCalculating}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition disabled:opacity-50"
+                >
+                  <Activity className="w-4 h-4" />
+                  <span>{predCalculating ? 'Computing Physics Model...' : 'Calculate & Save to SQLite'}</span>
+                </button>
+              </div>
+
+              {/* Form Input Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
+                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1">
+                  <label className="text-[10px] font-mono text-slate-400 uppercase block">Precipitation (mm/h)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={predPrecip}
+                    onChange={(e) => setPredPrecip(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-rose-400 focus:outline-none"
+                  />
+                  <span className="text-[9px] text-slate-500 block">Rainfall intensity rate</span>
+                </div>
+
+                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1">
+                  <label className="text-[10px] font-mono text-slate-400 uppercase block">Soil Saturation (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={predSat}
+                    onChange={(e) => setPredSat(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-rose-400 focus:outline-none"
+                  />
+                  <span className="text-[9px] text-slate-500 block">Ground moisture level</span>
+                </div>
+
+                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1">
+                  <label className="text-[10px] font-mono text-slate-400 uppercase block">Catchment Inflow (cusecs)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="500"
+                    value={predInflow}
+                    onChange={(e) => setPredInflow(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-rose-400 focus:outline-none"
+                  />
+                  <span className="text-[9px] text-slate-500 block">Dam / river tributary inflow</span>
+                </div>
+
+                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1">
+                  <label className="text-[10px] font-mono text-slate-400 uppercase block">Elevation (m MSL)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={predElevation}
+                    onChange={(e) => setPredElevation(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-rose-400 focus:outline-none"
+                  />
+                  <span className="text-[9px] text-slate-500 block">Terrain height above sea level</span>
+                </div>
+
+                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1">
+                  <label className="text-[10px] font-mono text-slate-400 uppercase block">Current Depth (cm)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={predCurrentDepth}
+                    onChange={(e) => setPredCurrentDepth(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-rose-400 focus:outline-none"
+                  />
+                  <span className="text-[9px] text-slate-500 block">Observed road-surface water</span>
+                </div>
+
+                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1">
+                  <label className="text-[10px] font-mono text-slate-400 uppercase block">Catchment Sector</label>
+                  <input
+                    type="text"
+                    value={predLocationName}
+                    onChange={(e) => setPredLocationName(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-rose-400 focus:outline-none"
+                  />
+                  <span className="text-[9px] text-slate-500 block">Basin or neighborhood name</span>
+                </div>
+              </div>
+
+              {/* Real-time Calculation Result Card */}
+              {predResult && (
+                <div className={`p-4 rounded-xl border ${
+                  predResult.risk_level === 'CRITICAL'
+                    ? 'bg-rose-950/40 border-rose-500/60 text-rose-200'
+                    : predResult.risk_level === 'WARNING'
+                    ? 'bg-amber-950/40 border-amber-500/60 text-amber-200'
+                    : predResult.risk_level === 'CAUTION'
+                    ? 'bg-sky-950/40 border-sky-500/60 text-sky-200'
+                    : 'bg-emerald-950/40 border-emerald-500/60 text-emerald-200'
+                } space-y-3`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-black uppercase tracking-wider ${
+                        predResult.risk_level === 'CRITICAL'
+                          ? 'bg-rose-500 text-white'
+                          : predResult.risk_level === 'WARNING'
+                          ? 'bg-amber-500 text-slate-950'
+                          : predResult.risk_level === 'CAUTION'
+                          ? 'bg-sky-500 text-slate-950'
+                          : 'bg-emerald-500 text-slate-950'
+                      }`}>
+                        RISK LEVEL: {predResult.risk_level}
+                      </span>
+                      <span className="text-xs font-mono text-slate-300">
+                        {predResult.location_name} • ID: {predResult.id}
+                      </span>
+                    </div>
+
+                    <div className="text-xs font-mono text-slate-400">
+                      Calculated at {new Date(predResult.timestamp).toLocaleTimeString()}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                    <div className="bg-slate-950/60 p-2.5 rounded-lg border border-white/10">
+                      <span className="text-[10px] font-mono text-slate-400 block">RUNOFF COEFFICIENT (R)</span>
+                      <span className="text-base font-black font-mono text-white">{predResult.runoff_coefficient}</span>
+                    </div>
+                    <div className="bg-slate-950/60 p-2.5 rounded-lg border border-white/10">
+                      <span className="text-[10px] font-mono text-slate-400 block">PREDICTED DEPTH (6H)</span>
+                      <span className="text-base font-black font-mono text-white">{predResult.predicted_depth_6h_cm} cm</span>
+                    </div>
+                    <div className="bg-slate-950/60 p-2.5 rounded-lg border border-white/10">
+                      <span className="text-[10px] font-mono text-slate-400 block">RATE OF RISE</span>
+                      <span className="text-base font-black font-mono text-white">{predResult.rate_of_rise_cm_min} cm/min</span>
+                    </div>
+                    <div className="bg-slate-950/60 p-2.5 rounded-lg border border-white/10">
+                      <span className="text-[10px] font-mono text-slate-400 block">INUNDATION ETA (50cm)</span>
+                      <span className="text-base font-black font-mono text-white">
+                        {predResult.inundation_eta_minutes !== null ? `${predResult.inundation_eta_minutes} mins` : 'Safe / Non-Critical'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-black/40 border border-white/10">
+                    <span className="text-[10px] font-mono text-slate-400 uppercase block mb-0.5">Recommended Evacuation Action</span>
+                    <p className="text-xs font-bold leading-relaxed">{predResult.recommended_action}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* SQLite Persistent Prediction Records Table */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-white text-base">Persistent SQLite Prediction History</h3>
+                  <p className="text-xs text-slate-400">
+                    Real-time records saved in the local SQLite `flood_predictions` table. Never transmitted to third-party paid servers.
+                  </p>
+                </div>
+                <button
+                  onClick={fetchPredictionHistory}
+                  disabled={predHistoryLoading}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 flex items-center gap-1.5 transition"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${predHistoryLoading ? 'animate-spin' : ''}`} />
+                  <span>Refresh SQLite Records</span>
+                </button>
+              </div>
+
+              {predHistory.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 font-mono text-xs bg-slate-950/40 rounded-xl border border-slate-800">
+                  No prediction records stored in SQLite yet. Adjust inputs above and click "Calculate & Save to SQLite".
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-[10px] font-mono uppercase text-slate-400">
+                        <th className="py-2.5 px-3">Timestamp</th>
+                        <th className="py-2.5 px-3">Location</th>
+                        <th className="py-2.5 px-3">Precipitation</th>
+                        <th className="py-2.5 px-3">Runoff (R)</th>
+                        <th className="py-2.5 px-3">Predicted 6h</th>
+                        <th className="py-2.5 px-3">ETA (50cm)</th>
+                        <th className="py-2.5 px-3">Risk Level</th>
+                        <th className="py-2.5 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-mono">
+                      {predHistory.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-800/40 transition">
+                          <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap">
+                            {new Date(item.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="py-2.5 px-3 font-semibold text-white whitespace-nowrap">
+                            {item.location_name || 'Catchment Basin'}
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-300">
+                            {item.precipitation_mm_h} mm/h
+                          </td>
+                          <td className="py-2.5 px-3 text-sky-400">
+                            {item.runoff_coefficient}
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-white">
+                            {item.predicted_depth_6h_cm} cm
+                          </td>
+                          <td className="py-2.5 px-3 text-amber-300">
+                            {item.inundation_eta_minutes !== null ? `${item.inundation_eta_minutes}m` : 'Safe'}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              item.risk_level === 'CRITICAL'
+                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                : item.risk_level === 'WARNING'
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                : item.risk_level === 'CAUTION'
+                                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            }`}>
+                              {item.risk_level}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <button
+                              onClick={() => handleDeletePrediction(item.id)}
+                              className="p-1.5 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition"
+                              title="Delete record from SQLite"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
       </div>
     </div>
   );

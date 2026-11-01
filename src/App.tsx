@@ -69,6 +69,7 @@ import {
   ShieldCheck,
   Smartphone,
   Users,
+  Waves,
   Wifi,
   WifiOff,
   Menu,

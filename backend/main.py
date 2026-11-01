@@ -30,6 +30,7 @@ from backend.api.weather import router as weather_router
 from backend.api.ai import router as ai_router
 from backend.api.auth_qr import router as auth_qr_router
 from backend.api.auth_admin import router as auth_admin_router
+from backend.api.prediction import router as prediction_router
 
 # Database-backed routers (Users, Predictions, Locations, History, System Admin)
 from backend.routers.users import router as users_router
@@ -93,6 +94,7 @@ app.include_router(weather_router)
 app.include_router(ai_router)
 app.include_router(auth_qr_router)
 app.include_router(auth_admin_router)
+app.include_router(prediction_router)
 
 # Database Operations Routers
 app.include_router(users_router)

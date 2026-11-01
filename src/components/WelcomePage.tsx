@@ -8,14 +8,11 @@ import {
   Navigation,
   LifeBuoy,
   Users,
-  Compass,
   ArrowRight,
   Lock,
   QrCode,
-  Flame,
   CheckCircle2,
-  AlertTriangle,
-  Waves,
+Waves,
 } from 'lucide-react';
 
 interface WelcomePageProps {
@@ -93,8 +90,14 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
         {/* Hero Section */}
         <div className="text-center space-y-4 max-w-3xl mx-auto">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-950/80 border border-sky-500/40 text-sky-300 text-xs font-mono">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>FloodGuard 2.1 • Complete Free Local Tactical Evacuation System</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+            <TextClipReveal
+              text="FloodGuard 2.1 • Complete Free Local Tactical Evacuation System"
+              as="span"
+              initialDelayMs={60}
+              charDelayMs={12}
+              durationMs={380}
+            />
           </div>
 
           <div className="space-y-3 py-2">
@@ -114,15 +117,20 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
               text="Smarter Detection. Safer Routes. Faster Rescue."
               as="p"
               className="text-lg sm:text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-sky-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent"
-              charDelayMs={22}
-              initialDelayMs={780}
+              charDelayMs={20}
+              initialDelayMs={720}
               durationMs={480}
             />
           </div>
 
-          <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl mx-auto">
-            Predict Floods. Protect Lives. Community-first emergency defense platform combining IoT hydrological sensing, wearable physiological telemetry, LoRa off-grid mesh, and Google Maps-style safe ground navigation.
-          </p>
+          <TextClipReveal
+            text="Predict Floods. Protect Lives. Community-first emergency defense platform combining IoT hydrological sensing, wearable physiological telemetry, LoRa off-grid mesh, and Google Maps-style safe ground navigation."
+            as="p"
+            className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl mx-auto"
+            charDelayMs={5}
+            initialDelayMs={900}
+            durationMs={350}
+          />
 
           {/* 3 Entry Action Buttons */}
           <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -131,8 +139,14 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
               onClick={onGetStarted}
               className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-gradient-to-r from-[#ff7700] to-amber-500 hover:from-[#e66c00] hover:to-amber-600 text-white font-bold text-sm uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition transform hover:-translate-y-0.5 active:scale-95"
             >
-              <span>Get Started (Register)</span>
-              <ArrowRight className="w-4 h-4" />
+              <TextClipReveal
+                text="Get Started (Register)"
+                as="span"
+                initialDelayMs={1050}
+                charDelayMs={14}
+                durationMs={400}
+              />
+              <ArrowRight className="w-4 h-4 shrink-0" />
             </button>
 
             {/* 2. User Login Button */}
@@ -140,8 +154,14 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
               onClick={onUserLogin}
               className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-sky-300 font-bold text-sm uppercase tracking-wider shadow flex items-center justify-center gap-2 transition hover:border-sky-500/50"
             >
-              <QrCode className="w-4 h-4 text-sky-400" />
-              <span>User Login (Dashboard / QR)</span>
+              <QrCode className="w-4 h-4 text-sky-400 shrink-0" />
+              <TextClipReveal
+                text="User Login (Dashboard / QR)"
+                as="span"
+                initialDelayMs={1120}
+                charDelayMs={14}
+                durationMs={400}
+              />
             </button>
 
             {/* 4. Hydro Prediction & SQLite Hub Button */}
@@ -160,27 +180,65 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
               onClick={onAdminLogin}
               className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold text-sm uppercase tracking-wider shadow flex items-center justify-center gap-2 transition hover:border-amber-400"
             >
-              <Lock className="w-4 h-4 text-amber-400" />
-              <span>Admin Login</span>
+              <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+              <TextClipReveal
+                text="Admin Login"
+                as="span"
+                initialDelayMs={1200}
+                charDelayMs={16}
+                durationMs={400}
+              />
             </button>
           </div>
 
           <div className="flex items-center justify-center gap-6 text-xs text-slate-400 font-mono pt-2">
-            <span>🛡️ {registeredCount} Registered Citizens</span>
+            <TextClipReveal
+              text={`🛡️ ${registeredCount} Registered Citizens`}
+              as="span"
+              initialDelayMs={1300}
+              charDelayMs={12}
+              durationMs={380}
+            />
             <span>•</span>
-            <span>⚡ 100% Free & Open Source</span>
+            <TextClipReveal
+              text="⚡ 100% Free & Open Source"
+              as="span"
+              initialDelayMs={1400}
+              charDelayMs={12}
+              durationMs={380}
+            />
             <span>•</span>
-            <span>🔒 Zero Paid APIs</span>
+            <TextClipReveal
+              text="🔒 Zero Paid APIs"
+              as="span"
+              initialDelayMs={1500}
+              charDelayMs={12}
+              durationMs={380}
+            />
           </div>
         </div>
 
         {/* Core Capabilities Grid */}
         <div className="space-y-4">
           <div className="text-center space-y-1">
-            <h2 className="text-xl sm:text-2xl font-bold text-white">Comprehensive Tactical Capabilities</h2>
-            <p className="text-xs sm:text-sm text-slate-400">
-              Engineered to operate reliably under extreme storm surges and total infrastructure collapse.
-            </p>
+            <TextClipReveal
+              text="Comprehensive Tactical Capabilities"
+              as="h2"
+              className="text-xl sm:text-2xl font-bold text-white"
+              animateOnView={true}
+              initialDelayMs={80}
+              charDelayMs={15}
+              durationMs={450}
+            />
+            <TextClipReveal
+              text="Engineered to operate reliably under extreme storm surges and total infrastructure collapse."
+              as="p"
+              className="text-xs sm:text-sm text-slate-400"
+              animateOnView={true}
+              initialDelayMs={250}
+              charDelayMs={8}
+              durationMs={380}
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -194,11 +252,34 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
                     {cap.icon}
                   </div>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                    {cap.badge}
+                    <TextClipReveal
+                      text={cap.badge}
+                      as="span"
+                      animateOnView={true}
+                      initialDelayMs={idx * 60 + 50}
+                      charDelayMs={10}
+                      durationMs={360}
+                    />
                   </span>
                 </div>
-                <h3 className="text-base font-bold text-white">{cap.title}</h3>
-                <p className="text-xs text-slate-300 leading-relaxed">{cap.description}</p>
+                <TextClipReveal
+                  text={cap.title}
+                  as="h3"
+                  className="text-base font-bold text-white"
+                  animateOnView={true}
+                  initialDelayMs={idx * 60 + 100}
+                  charDelayMs={14}
+                  durationMs={400}
+                />
+                <TextClipReveal
+                  text={cap.description}
+                  as="p"
+                  className="text-xs text-slate-300 leading-relaxed"
+                  animateOnView={true}
+                  initialDelayMs={idx * 60 + 160}
+                  charDelayMs={6}
+                  durationMs={350}
+                />
               </div>
             ))}
           </div>
@@ -207,28 +288,97 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
         {/* Free-Only Architecture Guarantee Callout */}
         <div className="bg-gradient-to-br from-slate-900 to-emerald-950/40 border border-emerald-500/30 rounded-2xl p-6 text-slate-300 space-y-3">
           <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm uppercase tracking-wider font-mono">
-            <CheckCircle2 className="w-5 h-5" />
-            <span>Strict Zero-Cost & Free-Only Guarantee</span>
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+            <TextClipReveal
+              text="Strict Zero-Cost & Free-Only Guarantee"
+              as="span"
+              animateOnView={true}
+              initialDelayMs={100}
+              charDelayMs={15}
+              durationMs={450}
+            />
           </div>
-          <p className="text-xs sm:text-sm leading-relaxed text-slate-300">
-            FloodGuard operates completely on free and open-source components. OpenStreetMap data, Leaflet mapping, Python FastAPI backend, SQLite local database, and free Web Speech voice guidance ensure the system functions without subscription fees, credit-card registration, or paid third-party API dependencies.
-          </p>
+          <TextClipReveal
+            text="FloodGuard operates completely on free and open-source components. OpenStreetMap data, Leaflet mapping, Python FastAPI backend, SQLite local database, and free Web Speech voice guidance ensure the system functions without subscription fees, credit-card registration, or paid third-party API dependencies."
+            as="p"
+            className="text-xs sm:text-sm leading-relaxed text-slate-300"
+            animateOnView={true}
+            initialDelayMs={250}
+            charDelayMs={5}
+            durationMs={350}
+          />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-[11px] font-mono text-slate-300">
             <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800">
-              <span className="text-slate-400 block text-[10px]">BACKEND</span>
-              <span className="font-bold text-white">FastAPI (Python)</span>
+              <TextClipReveal
+                text="BACKEND"
+                as="span"
+                className="text-slate-400 block text-[10px]"
+                animateOnView={true}
+                initialDelayMs={350}
+                charDelayMs={15}
+              />
+              <TextClipReveal
+                text="FastAPI (Python)"
+                as="span"
+                className="font-bold text-white block"
+                animateOnView={true}
+                initialDelayMs={420}
+                charDelayMs={12}
+              />
             </div>
             <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800">
-              <span className="text-slate-400 block text-[10px]">DATABASE</span>
-              <span className="font-bold text-white">SQLite 3 (Free)</span>
+              <TextClipReveal
+                text="DATABASE"
+                as="span"
+                className="text-slate-400 block text-[10px]"
+                animateOnView={true}
+                initialDelayMs={400}
+                charDelayMs={15}
+              />
+              <TextClipReveal
+                text="SQLite 3 (Free)"
+                as="span"
+                className="font-bold text-white block"
+                animateOnView={true}
+                initialDelayMs={470}
+                charDelayMs={12}
+              />
             </div>
             <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800">
-              <span className="text-slate-400 block text-[10px]">MAP TILES</span>
-              <span className="font-bold text-white">OpenStreetMap</span>
+              <TextClipReveal
+                text="MAP TILES"
+                as="span"
+                className="text-slate-400 block text-[10px]"
+                animateOnView={true}
+                initialDelayMs={450}
+                charDelayMs={15}
+              />
+              <TextClipReveal
+                text="OpenStreetMap"
+                as="span"
+                className="font-bold text-white block"
+                animateOnView={true}
+                initialDelayMs={520}
+                charDelayMs={12}
+              />
             </div>
             <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800">
-              <span className="text-slate-400 block text-[10px]">NAVIGATION</span>
-              <span className="font-bold text-white">A* Safe Routing</span>
+              <TextClipReveal
+                text="NAVIGATION"
+                as="span"
+                className="text-slate-400 block text-[10px]"
+                animateOnView={true}
+                initialDelayMs={500}
+                charDelayMs={15}
+              />
+              <TextClipReveal
+                text="A* Safe Routing"
+                as="span"
+                className="font-bold text-white block"
+                animateOnView={true}
+                initialDelayMs={570}
+                charDelayMs={12}
+              />
             </div>
           </div>
         </div>

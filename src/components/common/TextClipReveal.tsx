@@ -4,7 +4,7 @@ interface TextClipRevealProps {
   /** The text string to animate letter-by-letter */
   text: string;
   /** HTML element wrapper tag (default 'h1') */
-  as?: 'h1' | 'h2' | 'h3' | 'h4' | 'p' | 'span' | 'div';
+  as?: 'h1' | 'h2' | 'h3' | 'h4' | 'p' | 'span' | 'div' | 'strong' | 'label';
   /** Classes applied to the root element */
   className?: string;
   /** Classes applied to each word wrapper */
@@ -95,7 +95,7 @@ export const TextClipReveal: React.FC<TextClipRevealProps> = ({
       {/* Visual animated characters container */}
       <span aria-hidden="true" className="inline">
         {words.map((word, wordIndex) => {
-          const chars = word.split('');
+          const chars = Array.from(word);
           const isLastWord = wordIndex === words.length - 1;
 
           const wordContent = (
