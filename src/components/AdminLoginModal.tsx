@@ -43,10 +43,32 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
         }),
       });
 
-      const data = await response.json();
+      let data: any = {};
+      try {
+        const text = await response.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { error: text?.slice(0, 140) };
+        }
+      } catch {
+        data = {};
+      }
 
       if (!response.ok || !data.success) {
-        setErrorMessage(data.error || 'Invalid administrator username or password.');
+        if (response.status === 401) {
+          setErrorMessage(data.error || 'Invalid administrator username or password.');
+        } else if (response.status === 403) {
+          setErrorMessage(data.error || 'Access denied: Citizen role cannot access Command Center controls.');
+        } else if (response.status >= 500) {
+          setErrorMessage(
+            data.error && !data.error.includes('<')
+              ? `Authentication error (${response.status}): ${data.error}`
+              : `Authentication service returned HTTP ${response.status}. Please check backend logs or retry.`
+          );
+        } else {
+          setErrorMessage(data.error || `Authentication failed with status ${response.status}.`);
+        }
         setIsLoading(false);
         return;
       }
@@ -77,8 +99,14 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
         });
         onClose();
       }, 700);
-    } catch {
-      setErrorMessage('Failed to connect to authentication service. Please verify backend is running.');
+    } catch (err: any) {
+      console.error('Admin login network/client exception:', err);
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      setErrorMessage(
+        isOffline
+          ? 'Network offline. Please check your internet connection.'
+          : 'Failed to connect to authentication service. Please verify backend is running.'
+      );
       setIsLoading(false);
     }
   };

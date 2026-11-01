@@ -76,12 +76,26 @@ export const DeviceBQrLoginModal: React.FC<DeviceBQrLoginModalProps> = ({
         body: JSON.stringify({ targetDeviceInfo: deviceInfo }),
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${res.status}`);
+      let data: any = {};
+      try {
+        const text = await res.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { error: text?.slice(0, 140) };
+        }
+      } catch {
+        data = {};
       }
 
-      const data = await res.json();
+      if (!res.ok) {
+        const msg = data.error && !data.error.includes('<')
+          ? data.error
+          : (res.status >= 500
+              ? `Backend service error (HTTP ${res.status}). Verify FastAPI service is online.`
+              : `HTTP ${res.status}: Failed to initialize QR pairing.`);
+        throw new Error(msg);
+      }
       const sId = data.sessionId;
       const sTok = data.token;
       const qrData = data.qrData;
@@ -335,14 +349,20 @@ export const DeviceBQrLoginModal: React.FC<DeviceBQrLoginModalProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-2 text-red-600 p-4">
-                <AlertCircle className="w-8 h-8" />
-                <span className="text-xs font-semibold">{errorMessage || 'Initialization error'}</span>
+              <div className="flex flex-col items-center gap-2.5 text-center p-4">
+                <AlertCircle className="w-9 h-9 text-red-500 animate-pulse" />
+                <div className="text-xs font-bold text-red-600">
+                  {errorMessage?.includes('HTTP 500') || errorMessage?.includes('Backend service') ? 'Authentication Service Unavailable' : 'Initialization Error'}
+                </div>
+                <span className="text-[11px] text-slate-500 max-w-[210px] leading-relaxed">
+                  {errorMessage || 'Failed to establish pairing handshake.'}
+                </span>
                 <button
                   onClick={initializeSession}
-                  className="mt-2 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold"
+                  className="mt-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow transition"
                 >
-                  Retry
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retry</span>
                 </button>
               </div>
             )}

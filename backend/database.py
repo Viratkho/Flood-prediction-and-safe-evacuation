@@ -30,6 +30,19 @@ SEED_DATA_PATH = os.path.join(REPO_ROOT, "seed_data.json")
 Base = declarative_base()
 
 def get_db_path() -> str:
+    # On Vercel serverless functions, the file system is read-only except /tmp
+    if os.environ.get('VERCEL'):
+        vercel_tmp_db = '/tmp/floodguard.db'
+        if not os.path.exists(vercel_tmp_db):
+            bundled_db = os.path.join(BASE_DIR, 'database', 'floodguard.db')
+            if os.path.exists(bundled_db):
+                try:
+                    import shutil
+                    shutil.copyfile(bundled_db, vercel_tmp_db)
+                except Exception as e:
+                    print('Notice: could not copy bundled db to /tmp:', e)
+        return vercel_tmp_db
+
     path = os.environ.get("FLOODGUARD_DB_PATH", os.environ.get("DATABASE_PATH", DEFAULT_DB_PATH))
     parent = os.path.dirname(os.path.abspath(path))
     if parent and not os.path.exists(parent):
@@ -45,8 +58,14 @@ def get_db_connection() -> sqlite3.Connection:
     db_path = get_db_path()
     conn = sqlite3.connect(db_path, timeout=20.0)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    conn.execute("PRAGMA journal_mode = WAL;")
+    try:
+        conn.execute("PRAGMA foreign_keys = ON;")
+    except Exception:
+        pass
+    try:
+        conn.execute("PRAGMA journal_mode = WAL;")
+    except Exception:
+        pass
     return conn
 
 
@@ -87,8 +106,14 @@ def get_engine() -> Engine:
 def set_sqlite_pragma(dbapi_connection, connection_record):
     """Enforces SQLite foreign keys and WAL mode for every SQLAlchemy connection."""
     cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON;")
-    cursor.execute("PRAGMA journal_mode=WAL;")
+    try:
+        cursor.execute("PRAGMA foreign_keys=ON;")
+    except Exception:
+        pass
+    try:
+        cursor.execute("PRAGMA journal_mode=WAL;")
+    except Exception:
+        pass
     cursor.close()
 
 

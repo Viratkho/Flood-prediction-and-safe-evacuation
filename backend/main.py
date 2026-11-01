@@ -103,6 +103,16 @@ app.include_router(locations_router)
 app.include_router(history_router)
 app.include_router(system_router)
 
+@app.get("/api")
+def api_root_endpoint():
+    return {
+        "status": "ONLINE",
+        "system": "FloodGuard 2.1 Hydrological Command Engine",
+        "technology": "Python FastAPI + SQLite",
+        "rbac": "Active (PBKDF2-HMAC-SHA256)",
+        "qrAuth": "Active (Device A/B Handshake)",
+    }
+
 # 4. Static frontend asset delivery & SPA fallback
 DIST_DIR = Path(__file__).resolve().parent.parent / "dist"
 INDEX_HTML = DIST_DIR / "index.html"
@@ -112,6 +122,12 @@ if DIST_DIR.exists() and (DIST_DIR / "assets").exists():
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
+    # API route protection: never return HTML for API calls
+    if full_path == "api" or full_path == "api/":
+        return api_root_endpoint()
+    if full_path.startswith("api/"):
+        return JSONResponse(status_code=404, content={"error": f"API route '/{full_path}' not found."})
+
     # If file exists in dist, serve it
     if full_path:
         candidate = DIST_DIR / full_path
