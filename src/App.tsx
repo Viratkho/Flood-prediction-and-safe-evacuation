@@ -1,3 +1,4 @@
+import { FloodPredictionStudio } from './components/FloodPredictionStudio';
 import React, { useState, useEffect } from 'react';
 import { RescueCommandCenter } from './components/RescueCommandCenter';
 import { EvacuationApp } from './components/EvacuationApp';
@@ -79,6 +80,7 @@ import {
 type TabView =
   | 'welcome'
   | 'command-center'
+  | 'flood-prediction'
   | 'evacuation-app'
   | 'weather-news'
   | 'person-monitoring'
@@ -888,6 +890,18 @@ export default function App() {
 
           {/* Active Global Shared Location Pill */}
           <button
+            onClick={() => setActiveTab('flood-prediction')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'flood-prediction'
+                ? 'bg-[#ff7700] text-white shadow-lg'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Waves className="w-4 h-4 text-sky-400" />
+            <span>Hydro Prediction & DB</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('weather-news')}
             className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 transition"
             title="Active Global Shared Location (Click to view Weather & News)"
@@ -1006,6 +1020,18 @@ export default function App() {
           >
             <Navigation className="w-4 h-4" />
             <span>Evacuation App</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('flood-prediction')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'flood-prediction'
+                ? 'bg-[#ff7700] text-white shadow-lg'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Waves className="w-4 h-4 text-sky-400" />
+            <span>Hydro Prediction & DB</span>
           </button>
 
           <button
@@ -1257,6 +1283,21 @@ export default function App() {
 
               <button
                 onClick={() => {
+                  setActiveTab('flood-prediction');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                  activeTab === 'flood-prediction'
+                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/50'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`}
+              >
+                <Waves className="w-4 h-4 text-sky-400" />
+                <span>Prediction Studio</span>
+              </button>
+
+              <button
+                onClick={() => {
                   setActiveTab('incident-workspace');
                   setIsMobileMenuOpen(false);
                 }}
@@ -1445,6 +1486,7 @@ export default function App() {
               }
             }}
             onAdminLogin={() => setIsAdminModalOpen(true)}
+            onOpenFloodPrediction={() => setActiveTab('flood-prediction')}
             registeredCount={people.length}
             activeSensorsCount={sensors.length}
           />
@@ -1540,6 +1582,10 @@ export default function App() {
             sharedLocation={sharedLocation}
             onUpdateSharedLocation={handleUpdateSharedLocation}
           />
+        )}
+
+        {activeTab === 'flood-prediction' && (
+          <FloodPredictionStudio />
         )}
 
         {activeTab === 'research-simulation' && (

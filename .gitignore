@@ -20,7 +20,13 @@ venv/
 
 # SQLite Databases & WAL
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 backend/data/*.db
 backend/data/*.db-shm
 backend/data/*.db-wal
+backend/database/*.db
+backend/database/*.db-shm
+backend/database/*.db-wal
+backend/database/backups/

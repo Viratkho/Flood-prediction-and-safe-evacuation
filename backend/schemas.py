@@ -1,9 +1,15 @@
 """
 FloodGuard 2.1 — Pydantic Schemas for Request & Response Contracts
+Free, Open-Source, and Fully Validated.
 """
 
 from typing import List, Optional, Dict, Any, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
+
+
+# ==========================================================
+# 1. Existing System Schemas (Preserved for 100% Backwards Compatibility)
+# ==========================================================
 
 class PersonCreateRequest(BaseModel):
     name: Optional[str] = None
@@ -100,6 +106,217 @@ class AiAdviseRequest(BaseModel):
 
 class RunScenarioRequest(BaseModel):
     scenarioId: str
+
+    class Config:
+        extra = "allow"
+
+
+# ==========================================================
+# 2. User Schemas (Section 4.A & Section 7)
+# ==========================================================
+
+class UserRegisterRequest(BaseModel):
+    full_name: str = Field(..., min_length=2, max_length=150)
+    email: str = Field(..., min_length=5, max_length=255)
+    password: str = Field(..., min_length=6, max_length=128)
+    phone_number: Optional[str] = Field(None, max_length=50)
+    role: Optional[str] = Field("user", max_length=30)
+
+    class Config:
+        extra = "allow"
+
+
+class UserLoginRequest(BaseModel):
+    email: str = Field(..., min_length=5, max_length=255)
+    password: str = Field(..., min_length=1, max_length=128)
+
+    class Config:
+        extra = "allow"
+
+
+class UserResponse(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    phone_number: Optional[str] = None
+    role: str
+    created_at: str
+    updated_at: str
+    is_active: bool
+
+    class Config:
+        extra = "allow"
+
+
+class UserLoginResponse(BaseModel):
+    token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+    class Config:
+        extra = "allow"
+
+
+# ==========================================================
+# 3. Location Schemas (Section 4.B & Section 7)
+# ==========================================================
+
+class LocationCreate(BaseModel):
+    location_name: str = Field(..., min_length=2, max_length=200)
+    latitude: float = Field(..., ge=-90.0, le=90.0)
+    longitude: float = Field(..., ge=-180.0, le=180.0)
+    district: Optional[str] = None
+    state: Optional[str] = None
+    elevation_m: Optional[float] = None
+    user_id: Optional[int] = None
+
+    class Config:
+        extra = "allow"
+
+
+class LocationResponse(BaseModel):
+    id: int
+    user_id: Optional[int] = None
+    location_name: str
+    latitude: float
+    longitude: float
+    district: Optional[str] = None
+    state: Optional[str] = None
+    elevation_m: Optional[float] = None
+    created_at: str
+
+    class Config:
+        extra = "allow"
+
+
+# ==========================================================
+# 4. Flood Prediction Schemas (Section 4.C & Section 7)
+# ==========================================================
+
+class PredictionCreate(BaseModel):
+    location_name: str = Field(..., min_length=2, max_length=200)
+    latitude: float = Field(..., ge=-90.0, le=90.0)
+    longitude: float = Field(..., ge=-180.0, le=180.0)
+    rainfall: float = Field(..., ge=0.0, le=1000.0)
+    water_level: float = Field(..., ge=0.0, le=100.0)
+    river_level: Optional[float] = Field(None, ge=0.0, le=100.0)
+    soil_moisture: Optional[float] = Field(None, ge=0.0, le=100.0)
+    temperature: Optional[float] = Field(None, ge=-50.0, le=60.0)
+    humidity: Optional[float] = Field(None, ge=0.0, le=100.0)
+    location_id: Optional[int] = None
+    user_id: Optional[int] = None
+
+    class Config:
+        extra = "allow"
+
+
+class PredictionResponse(BaseModel):
+    id: int
+    user_id: Optional[int] = None
+    location_id: Optional[int] = None
+    latitude: float
+    longitude: float
+    location_name: str
+    rainfall: float
+    water_level: float
+    river_level: Optional[float] = None
+    soil_moisture: Optional[float] = None
+    temperature: Optional[float] = None
+    humidity: Optional[float] = None
+    prediction_result: str
+    risk_level: str
+    prediction_confidence: float
+    flood_eta_minutes: Optional[int] = None
+    severity_score: float
+    recommendation: Optional[str] = None
+    model_version: str
+    prediction_timestamp: str
+    created_at: str
+
+    class Config:
+        extra = "allow"
+
+
+# ==========================================================
+# 5. Flood Alert Schemas (Section 4.D & Section 7)
+# ==========================================================
+
+class FloodAlertCreate(BaseModel):
+    location_id: Optional[int] = None
+    prediction_id: Optional[int] = None
+    alert_type: str = Field(..., min_length=2, max_length=50)
+    severity: str = Field(..., min_length=2, max_length=30)
+    alert_message: str = Field(..., min_length=2, max_length=2000)
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    is_active: Optional[bool] = True
+
+    class Config:
+        extra = "allow"
+
+
+class FloodAlertResponse(BaseModel):
+    id: int
+    location_id: Optional[int] = None
+    prediction_id: Optional[int] = None
+    alert_type: str
+    severity: str
+    alert_message: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    created_at: str
+    is_active: bool
+
+    class Config:
+        extra = "allow"
+
+
+# ==========================================================
+# 6. Prediction History Schemas (Section 4.E)
+# ==========================================================
+
+class PredictionHistoryResponse(BaseModel):
+    id: int
+    prediction_id: int
+    user_id: Optional[int] = None
+    input_snapshot: str
+    output_snapshot: str
+    timestamp: str
+
+    class Config:
+        extra = "allow"
+
+
+# ==========================================================
+# 7. System Configuration & Backup Schemas (Section 4.F & Section 11)
+# ==========================================================
+
+class SystemConfigCreate(BaseModel):
+    config_key: str = Field(..., min_length=2, max_length=100)
+    config_value: str
+    description: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class SystemConfigResponse(BaseModel):
+    id: int
+    config_key: str
+    config_value: str
+    description: Optional[str] = None
+    updated_at: str
+
+    class Config:
+        extra = "allow"
+
+
+class BackupResponse(BaseModel):
+    status: str
+    backup_file: str
+    backup_path: str
+    timestamp: str
+    file_size_bytes: int
 
     class Config:
         extra = "allow"

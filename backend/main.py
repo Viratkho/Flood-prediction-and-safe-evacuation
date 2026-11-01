@@ -23,7 +23,7 @@ from backend.api.health import router as health_router
 from backend.api.dam import router as dam_router
 from backend.api.people import router as people_router
 from backend.api.incidents import router as incidents_router
-from backend.api.alerts import router as alerts_router
+from backend.routers.flood_alerts import router as alerts_router
 from backend.api.security import router as security_router
 from backend.api.research import router as research_router
 from backend.api.weather import router as weather_router
@@ -31,11 +31,18 @@ from backend.api.ai import router as ai_router
 from backend.api.auth_qr import router as auth_qr_router
 from backend.api.auth_admin import router as auth_admin_router
 
+# Database-backed routers (Users, Predictions, Locations, History, System Admin)
+from backend.routers.users import router as users_router
+from backend.routers.predictions import router as predictions_router
+from backend.routers.locations import router as locations_router
+from backend.routers.history import router as history_router
+from backend.routers.system import router as system_router
+
 async def simulation_ticker():
     while True:
         try:
             dam_service.tick()
-        except Exception as e:
+        except Exception:
             pass
         await asyncio.sleep(2.0)
 
@@ -55,7 +62,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="FloodGuard 2.1 Backend",
-    description="Tactical Flood Prediction & Safe Evacuation API (FastAPI + SQLite)",
+    description="Tactical Flood Prediction & Safe Evacuation API (FastAPI + SQLite + SQLAlchemy)",
     version="2.1.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -86,6 +93,13 @@ app.include_router(weather_router)
 app.include_router(ai_router)
 app.include_router(auth_qr_router)
 app.include_router(auth_admin_router)
+
+# Database Operations Routers
+app.include_router(users_router)
+app.include_router(predictions_router)
+app.include_router(locations_router)
+app.include_router(history_router)
+app.include_router(system_router)
 
 # 4. Static frontend asset delivery & SPA fallback
 DIST_DIR = Path(__file__).resolve().parent.parent / "dist"

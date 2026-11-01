@@ -15,12 +15,14 @@ import {
   Flame,
   CheckCircle2,
   AlertTriangle,
+  Waves,
 } from 'lucide-react';
 
 interface WelcomePageProps {
   onGetStarted: () => void;
   onUserLogin: () => void;
   onAdminLogin: () => void;
+  onOpenFloodPrediction?: () => void;
   registeredCount: number;
   activeSensorsCount: number;
 }
@@ -29,6 +31,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
   onGetStarted,
   onUserLogin,
   onAdminLogin,
+  onOpenFloodPrediction,
   registeredCount,
   activeSensorsCount,
 }) => {
@@ -140,6 +143,17 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
               <QrCode className="w-4 h-4 text-sky-400" />
               <span>User Login (Dashboard / QR)</span>
             </button>
+
+            {/* 4. Hydro Prediction & SQLite Hub Button */}
+            {onOpenFloodPrediction && (
+              <button
+                onClick={onOpenFloodPrediction}
+                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/40 text-sky-300 font-bold text-sm uppercase tracking-wider shadow flex items-center justify-center gap-2 transition hover:border-sky-400"
+              >
+                <Waves className="w-4 h-4 text-sky-400" />
+                <span>Prediction & SQLite Hub</span>
+              </button>
+            )}
 
             {/* 3. Admin Login Button */}
             <button

@@ -1,6 +1,7 @@
 """
 FloodGuard 2.1 — SQLite Database Persistence Layer
 Completely Free, Local, and Open Source.
+Integrated with Python sqlite3 and SQLAlchemy ORM.
 """
 
 import os
@@ -11,16 +12,25 @@ import math
 from contextlib import contextmanager
 from typing import Generator, Optional, List, Dict, Any
 
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
+
 # Resolve default persistent database path
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_DB_PATH = os.path.join(BASE_DIR, "data", "floodguard.db")
+DEFAULT_DB_PATH = os.environ.get(
+    "FLOODGUARD_DB_PATH",
+    os.environ.get("DATABASE_PATH", os.path.join(BASE_DIR, "database", "floodguard.db"))
+)
 DATABASE_PATH = os.environ.get("DATABASE_PATH", DEFAULT_DB_PATH)
 REPO_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 SEED_DATA_PATH = os.path.join(REPO_ROOT, "seed_data.json")
 
+# SQLAlchemy Declarative Base
+Base = declarative_base()
 
 def get_db_path() -> str:
-    path = os.environ.get("DATABASE_PATH", DEFAULT_DB_PATH)
+    path = os.environ.get("FLOODGUARD_DB_PATH", os.environ.get("DATABASE_PATH", DEFAULT_DB_PATH))
     parent = os.path.dirname(os.path.abspath(path))
     if parent and not os.path.exists(parent):
         os.makedirs(parent, exist_ok=True)
@@ -29,11 +39,11 @@ def get_db_path() -> str:
 
 def get_db_connection() -> sqlite3.Connection:
     """
-    Creates and returns a raw SQLite connection with foreign keys enabled
-    and Row factory configured.
+    Creates and returns a raw SQLite connection with foreign keys enabled,
+    WAL journaling, and Row factory configured.
     """
     db_path = get_db_path()
-    conn = sqlite3.connect(db_path, timeout=15.0)
+    conn = sqlite3.connect(db_path, timeout=20.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("PRAGMA journal_mode = WAL;")
@@ -54,6 +64,57 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
         raise
     finally:
         conn.close()
+
+
+# SQLAlchemy Engine and Session Factory Configuration
+_engine: Optional[Engine] = None
+_SessionFactory = None
+
+
+def get_engine() -> Engine:
+    global _engine
+    if _engine is None:
+        db_path = get_db_path()
+        _engine = create_engine(
+            f"sqlite:///{db_path}",
+            connect_args={"check_same_thread": False, "timeout": 20.0},
+            echo=False
+        )
+    return _engine
+
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    """Enforces SQLite foreign keys and WAL mode for every SQLAlchemy connection."""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON;")
+    cursor.execute("PRAGMA journal_mode=WAL;")
+    cursor.close()
+
+
+def get_session_factory():
+    global _SessionFactory
+    if _SessionFactory is None:
+        engine = get_engine()
+        _SessionFactory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    return _SessionFactory
+
+
+def get_db_session() -> Generator[Session, None, None]:
+    """
+    FastAPI dependency that yields an isolated SQLAlchemy database session
+    with automatic rollback on error and proper closing.
+    """
+    SessionFactory = get_session_factory()
+    session: Session = SessionFactory()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 def seed_initial_data(conn: sqlite3.Connection, force: bool = False):
@@ -218,7 +279,7 @@ def seed_initial_data(conn: sqlite3.Connection, force: bool = False):
                 ),
             )
 
-        # 0. Seed Default Admin User (zoro / roronovazoro22#)
+    # 3. Seed Default Admin User (zoro / roronovazoro22#)
     cursor.execute("SELECT id FROM admin_users WHERE username = 'zoro';")
     if not cursor.fetchone():
         import secrets
@@ -235,55 +296,229 @@ def seed_initial_data(conn: sqlite3.Connection, force: bool = False):
             ("zoro", admin_pwd_hash, admin_salt, time.strftime("%Y-%m-%d %H:%M:%S")),
         )
 
-    # 3. Seed Dam State
+    # 4. Seed Default Monitored Locations if empty
+    cursor.execute("SELECT COUNT(*) AS cnt FROM locations;")
+    if cursor.fetchone()["cnt"] == 0:
+        default_locs = [
+            ("Avadi Bus Terminus Junction", 13.1182, 80.1008, "Tiruvallur", "Tamil Nadu", 24.2),
+            ("CTH Road & Gandhi Nagar Cross", 13.1158, 80.1042, "Tiruvallur", "Tamil Nadu", 22.8),
+            ("Poonamallee High Rd & Avadi Link", 13.1095, 80.1015, "Tiruvallur", "Tamil Nadu", 20.4),
+            ("Sekkadu Canal Bridge Junction", 13.1042, 80.0982, "Tiruvallur", "Tamil Nadu", 14.1),
+            ("Paruthipattu Sluice Crossing", 13.1020, 80.1075, "Tiruvallur", "Tamil Nadu", 15.5),
+            ("Mittanamalli High Ridge Haven", 13.1320, 80.1030, "Tiruvallur", "Tamil Nadu", 31.0)
+        ]
+        now_ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        for loc_name, lat, lng, dist, st, elev in default_locs:
+            cursor.execute(
+                """
+                INSERT INTO locations (location_name, latitude, longitude, district, state, elevation_m, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (loc_name, lat, lng, dist, st, elev, now_ts)
+            )
+
+    # 5. Seed System Configurations
+    default_configs = [
+        ("PREDICTION_MODEL", "Deterministic-Hydrology-v2.1", "Active flood prediction model identifier"),
+        ("HIGH_RISK_SURGE_THRESHOLD_CM", "35.0", "Water depth threshold (cm) triggering high surge warning"),
+        ("CRITICAL_FLOOD_THRESHOLD_CM", "50.0", "Water depth threshold (cm) rendering roads completely impassable"),
+        ("DEFAULT_INUNDATION_LOOKAHEAD_MIN", "60", "Default hydrological forward projection window (minutes)"),
+        ("DATABASE_ENGINE", "SQLite 3 (WAL Mode + Foreign Keys + SQLAlchemy)", "Primary persistent storage engine")
+    ]
+    now_ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    for key, val, desc in default_configs:
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO system_configurations (config_key, config_value, description, updated_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (key, val, desc, now_ts)
+        )
+
+    # 6. Seed Dam State
     cursor.execute("SELECT COUNT(*) AS cnt FROM dam_state;")
     dam_count = cursor.fetchone()["cnt"]
 
-    if dam_count == 0:
-        history = []
-        now_ts = time.time()
-        for i in range(59, -1, -1):
-            t_str = time.strftime("%I:%M:%S %p", time.localtime(now_ts - i))
-            wobble = math.sin(i / 5.0) * 0.15
-            history.append({
-                "timestamp": t_str,
-                "level": round(32.2 + wobble, 2),
-                "precipitation": 12 + (i % 5),
-                "release": 3500,
-            })
-
+    if dam_count == 0 or force:
+        now_ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        initial_history = [
+            {"time": "09:00", "level": 18.2, "inflow": 4200, "outflow": 3800, "status": "OPTIMAL"},
+            {"time": "09:30", "level": 18.4, "inflow": 4500, "outflow": 4000, "status": "OPTIMAL"},
+            {"time": "10:00", "level": 18.7, "inflow": 4900, "outflow": 4200, "status": "OPTIMAL"},
+            {"time": "10:30", "level": 19.1, "inflow": 5600, "outflow": 4500, "status": "ELEVATED"},
+            {"time": "11:00", "level": 19.6, "inflow": 6400, "outflow": 5000, "status": "ELEVATED"},
+            {"time": "11:30", "level": 20.2, "inflow": 7800, "outflow": 6200, "status": "WARNING"},
+            {"time": "12:00", "level": 20.8, "inflow": 9200, "outflow": 8000, "status": "WARNING"},
+            {"time": "12:30", "level": 21.4, "inflow": 11000, "outflow": 10500, "status": "CRITICAL"},
+        ]
         cursor.execute(
             """
             INSERT OR REPLACE INTO dam_state (
                 id, dam_name, reservoir_level_m, max_crest_level_m, precipitation_mm_h,
                 rate_of_rise_m_min, spillway_release_cusecs, inflow_cusecs, status,
                 last_updated, history, is_storm_active, is_full_flood_active
-            ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+            ) VALUES (1, 'Poondi Reservoir (Sathyamurthy Sagar)', 20.4, 24.0, 18.5, 0.04, 4500, 5200, 'ELEVATED', ?, ?, 0, 0)
             """,
-            (
-                "Chembarambakkam & Avadi Catchment Dam",
-                32.4,
-                38.0,
-                14.5,
-                0.02,
-                3500.0,
-                14200.0,
-                "NORMAL",
-                time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                json.dumps(history),
-            ),
+            (now_ts, json.dumps(initial_history)),
+        )
+
+    # 7. Seed Default Registered User for testing/demo if empty
+    cursor.execute("SELECT COUNT(*) AS cnt FROM users;")
+    if cursor.fetchone()["cnt"] == 0:
+        import secrets
+        import hashlib
+        salt = secrets.token_hex(16)
+        pwd_hash = hashlib.pbkdf2_hmac("sha256", "FloodGuard@2026".encode("utf-8"), salt.encode("utf-8"), 100000).hex()
+        now_ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute(
+            """
+            INSERT INTO users (full_name, email, phone_number, password_hash, salt, role, created_at, updated_at, is_active)
+            VALUES (?, ?, ?, ?, ?, 'administrator', ?, ?, 1)
+            """,
+            ("FloodGuard Chief Hydrologist", "admin@floodguard.local", "+919840100000", pwd_hash, salt, now_ts, now_ts)
         )
 
 
 def init_db():
     """
-    Initializes tables idempotently. Never deletes existing data on startup.
-    Migrates existing data from local JSON or seed files if database is empty.
+    Initializes the SQLite schema with foreign keys, WAL journaling, and indexes.
+    Idempotent: will never drop or overwrite existing persistent tables.
     """
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # 1. People Registry Table
+        # 1. Registered Users Table (Compliant with Section 4.A)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                full_name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                phone_number TEXT,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1
+            );
+            """
+        )
+
+        # 2. User Active Sessions Table (Revocable auth sessions)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                session_token TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                email TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            """
+        )
+
+        # 3. Monitored Locations Table (Compliant with Section 4.B)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS locations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                location_name TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                district TEXT,
+                state TEXT,
+                elevation_m REAL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            """
+        )
+
+        # 4. Flood Predictions Primary Table (Compliant with Section 4.C)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS flood_predictions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                location_id INTEGER,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                location_name TEXT NOT NULL,
+                rainfall REAL NOT NULL,
+                water_level REAL NOT NULL,
+                river_level REAL,
+                soil_moisture REAL,
+                temperature REAL,
+                humidity REAL,
+                prediction_result TEXT NOT NULL,
+                risk_level TEXT NOT NULL,
+                prediction_confidence REAL NOT NULL,
+                flood_eta_minutes INTEGER,
+                severity_score REAL NOT NULL,
+                recommendation TEXT,
+                model_version TEXT NOT NULL DEFAULT 'Deterministic-Hydrology-v2.1',
+                prediction_timestamp TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL
+            );
+            """
+        )
+
+        # 5. Flood Alerts Table (Compliant with Section 4.D)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS flood_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                location_id INTEGER,
+                prediction_id INTEGER,
+                alert_type TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                alert_message TEXT NOT NULL,
+                latitude REAL,
+                longitude REAL,
+                created_at TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL,
+                FOREIGN KEY (prediction_id) REFERENCES flood_predictions(id) ON DELETE CASCADE
+            );
+            """
+        )
+
+        # 6. Prediction History Table (Compliant with Section 4.E)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS prediction_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                prediction_id INTEGER NOT NULL,
+                user_id INTEGER,
+                input_snapshot TEXT NOT NULL,
+                output_snapshot TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                FOREIGN KEY (prediction_id) REFERENCES flood_predictions(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            """
+        )
+
+        # 7. System Configurations Table (Compliant with Section 4.F)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS system_configurations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                config_key TEXT UNIQUE NOT NULL,
+                config_value TEXT NOT NULL,
+                description TEXT,
+                updated_at TEXT NOT NULL
+            );
+            """
+        )
+
+        # 8. Citizens Registry (People) Table
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS people (
@@ -300,8 +535,8 @@ def init_db():
                 country TEXT,
                 administrative_region TEXT,
                 country_code TEXT,
-                lat REAL,
-                lng REAL,
+                lat REAL NOT NULL,
+                lng REAL NOT NULL,
                 location_timestamp TEXT,
                 gps_accuracy_m REAL,
                 elevation_m REAL,
@@ -339,7 +574,7 @@ def init_db():
             """
         )
 
-        # 2. Incidents Table
+        # 9. Incidents Table
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS incidents (
@@ -349,12 +584,12 @@ def init_db():
                 person_age INTEGER,
                 person_gender TEXT,
                 wearable_id TEXT,
-                priority TEXT NOT NULL,
-                status TEXT NOT NULL,
+                priority TEXT,
+                status TEXT,
                 hazard_type TEXT,
                 hazard_description TEXT,
-                lat REAL,
-                lng REAL,
+                lat REAL NOT NULL,
+                lng REAL NOT NULL,
                 location_name TEXT,
                 water_level_cm REAL,
                 is_immediate_danger INTEGER DEFAULT 0,
@@ -374,68 +609,49 @@ def init_db():
             """
         )
 
-        # 3. Mobile Alerts Log Table
+        # 10. Mobile Alerts Table
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS mobile_alerts (
                 id TEXT PRIMARY KEY,
-                timestamp TEXT,
-                mobile_number TEXT,
-                recipient_name TEXT,
-                alert_type TEXT,
-                headline TEXT,
-                message TEXT,
-                status TEXT,
-                gateway TEXT,
+                timestamp TEXT NOT NULL,
+                mobile_number TEXT NOT NULL,
+                recipient_name TEXT NOT NULL,
+                alert_type TEXT NOT NULL,
+                headline TEXT NOT NULL,
+                message TEXT NOT NULL,
+                status TEXT NOT NULL,
+                gateway TEXT NOT NULL,
+                person_id TEXT,
                 free_api_used TEXT,
                 native_sms_url TEXT,
-                person_id TEXT,
                 FOREIGN KEY (person_id) REFERENCES people(person_id) ON DELETE SET NULL
             );
             """
         )
 
-        # 4. Research Experiment Logs Table
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS experiment_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT,
-                scenario_id TEXT,
-                scenario_name TEXT,
-                person_id TEXT,
-                person_name TEXT,
-                input_condition TEXT,
-                previous_priority TEXT,
-                new_priority TEXT,
-                reason TEXT,
-                outcome TEXT
-            );
-            """
-        )
-
-        # 5. Dam Telemetry & Simulation State Table (Single row, id=1)
+        # 11. Dam State Table
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS dam_state (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                dam_name TEXT,
-                reservoir_level_m REAL,
-                max_crest_level_m REAL,
-                precipitation_mm_h REAL,
-                rate_of_rise_m_min REAL,
-                spillway_release_cusecs REAL,
-                inflow_cusecs REAL,
-                status TEXT,
-                last_updated TEXT,
-                history TEXT,
+                id INTEGER PRIMARY KEY,
+                dam_name TEXT NOT NULL,
+                reservoir_level_m REAL NOT NULL,
+                max_crest_level_m REAL NOT NULL,
+                precipitation_mm_h REAL NOT NULL,
+                rate_of_rise_m_min REAL NOT NULL,
+                spillway_release_cusecs REAL NOT NULL,
+                inflow_cusecs REAL NOT NULL,
+                status TEXT NOT NULL,
+                last_updated TEXT NOT NULL,
+                history TEXT NOT NULL,
                 is_storm_active INTEGER DEFAULT 0,
                 is_full_flood_active INTEGER DEFAULT 0
             );
             """
         )
 
-        # 6. WAF Threat Logs Table
+        # 12. Firewall Threat Logs Table
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS firewall_threat_logs (
@@ -452,7 +668,7 @@ def init_db():
             """
         )
 
-        # 7. Quarantined IPs Table
+        # 13. Quarantined IPs Table
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS quarantined_ips (
@@ -464,7 +680,7 @@ def init_db():
             """
         )
 
-        # 8. QR-Based Device Pairing Sessions Table
+        # 14. Device Pairing Sessions Table
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS device_pairing_sessions (
@@ -484,7 +700,7 @@ def init_db():
             """
         )
 
-                # 9. Admin Users Table (Role-Based Access Control)
+        # 15. Admin Users & Sessions Tables
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS admin_users (
@@ -498,7 +714,6 @@ def init_db():
             """
         )
 
-        # 10. Admin Active Sessions Table
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS admin_sessions (
@@ -513,15 +728,19 @@ def init_db():
             """
         )
 
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username);")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_sessions_token ON admin_sessions(session_token);")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);")
-
-        # Indexes for fast lookup
+        # Indexes for fast lookup & data integrity
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_predictions_risk ON flood_predictions(risk_level);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_predictions_created ON flood_predictions(created_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_predictions_user ON flood_predictions(user_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_locations_name ON locations(location_name);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_flood_alerts_active ON flood_alerts(is_active);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_flood_alerts_created ON flood_alerts(created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_people_priority ON people(rescue_priority);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_incidents_priority ON incidents(priority);")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pairing_status ON device_pairing_sessions(status);")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pairing_expires ON device_pairing_sessions(expires_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username);")
 
         seed_initial_data(conn, force=False)

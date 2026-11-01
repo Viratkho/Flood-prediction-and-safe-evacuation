@@ -84,7 +84,7 @@ async def create_pairing_session(request: Request):
         target_info["ip"] = ip
 
     session_id = f"PAIR-{secrets.token_hex(6).upper()}"
-    raw_token = secrets.token_urlsafe(32)
+    raw_token = secrets.token_hex(32)
     token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
     now_utc = datetime.now(timezone.utc)
