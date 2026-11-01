@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { motion, useScroll, useReducedMotion } from 'motion/react';
+import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion';
 import { TextClipReveal } from './common/TextClipReveal';
 import {
   Shield,
@@ -61,14 +61,18 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
   onLogoutCitizen,
   onLogoutAdmin,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const workflowRef = useRef<HTMLDivElement>(null);
   const shouldReduceMotion = useReducedMotion();
 
-  // Scroll Progress linked exclusively to Section 5 (How FloodGuard Works)
+  // Scroll Progress linked exclusively to Section 5 with custom scroll container explicitly bound
   const { scrollYProgress } = useScroll({
     target: workflowRef,
-    offset: ['start 75%', 'end 75%'],
+    container: containerRef,
+    offset: ['start 75%', 'end 25%'],
   });
+
+  const lineProgress = useTransform(scrollYProgress, [0, 1], [0, 1]);
 
   // Section 2: 7 Core Objectives
   const coreObjectives = [
@@ -301,7 +305,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
   ];
 
   return (
-    <div className="w-full h-full overflow-y-auto bg-slate-950 text-slate-100 p-4 sm:p-6 lg:p-8">
+    <div ref={containerRef} className="w-full h-full overflow-y-auto bg-slate-950 text-slate-100 p-4 sm:p-6 lg:p-8">
       <div className="max-w-6xl mx-auto space-y-16 py-4">
         {/* ========================================================================= */}
         {/* SECTION 1: HERO / INTRODUCTION                                            */}
@@ -552,57 +556,73 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
         {/* ========================================================================= */}
         {/* SECTION 5: HOW FLOODGUARD WORKS (WITH SCROLL JOURNEY LINE ANIMATION)      */}
         {/* ========================================================================= */}
-        <div
+        <section
           ref={workflowRef}
           className="space-y-8 pt-6 border-t border-slate-800/80 relative"
+          aria-labelledby="workflow-heading"
         >
           <div className="text-center space-y-2 max-w-2xl mx-auto">
-            <div className="text-xs font-mono font-bold uppercase tracking-wider text-[#ff7700]">
-              System Architecture & Flow
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#00c8ff]">
+              FLOODGUARD SYSTEM ARCHITECTURE
+            </span>
+            <h2 id="workflow-heading" className="text-2xl sm:text-3xl font-extrabold text-white">
               How FloodGuard Works
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Scroll through the sequence below to trace the complete end-to-end journey from initial water sensing to tactical rescue coordination.
+              Follow the journey from flood monitoring to emergency response.
             </p>
           </div>
 
           {/* Connected Scroll Journey Section with Progressive SVG Line */}
           <div className="relative max-w-3xl mx-auto py-6">
-            {/* Progressive SVG Scroll Journey Connector Line */}
-            <div className="absolute left-6 md:left-8 top-12 bottom-12 w-2 pointer-events-none">
+            {/* SVG Progressive Journey Line: Aligned with center of step nodes */}
+            <svg
+              className="absolute top-6 bottom-6 left-[24px] sm:left-[28px] -translate-x-1/2 w-1 h-[calc(100%-48px)] overflow-visible pointer-events-none z-0"
+              viewBox="0 0 4 1000"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
               {/* Background Guide Line */}
-              <div className="absolute inset-0 w-0.5 bg-slate-800/80 mx-auto" />
+              <path
+                d="M 2 0 V 1000"
+                fill="none"
+                stroke="#1e293b"
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
 
               {/* Framer Motion Progressive Journey Line */}
-              <svg className="absolute inset-0 w-full h-full overflow-visible">
-                <motion.line
-                  x1="50%"
-                  y1="0"
-                  x2="50%"
-                  y2="100%"
-                  stroke="#ff7700"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  style={{
-                    pathLength: shouldReduceMotion ? 1 : scrollYProgress,
-                  }}
-                />
-              </svg>
-            </div>
+              <motion.path
+                d="M 2 0 V 1000"
+                fill="none"
+                stroke="#ff7700"
+                strokeWidth="4"
+                strokeLinecap="round"
+                initial={{ pathLength: 0 }}
+                style={{
+                  pathLength: shouldReduceMotion ? 1 : lineProgress,
+                  filter: 'drop-shadow(0 0 6px rgba(255, 119, 0, 0.6))',
+                }}
+              />
+            </svg>
 
             {/* Stages Stack */}
-            <div className="space-y-8">
+            <div className="space-y-8 relative z-10">
               {workflowStages.map((stage, idx) => (
-                <div key={idx} className="relative flex items-start gap-4 sm:gap-6 pl-2">
+                <div key={idx} className="relative flex items-start gap-4 sm:gap-6">
                   {/* Node Icon Indicator */}
-                  <div className="relative z-10 w-10 sm:w-12 h-10 sm:h-12 rounded-2xl bg-slate-900 border-2 border-slate-700/80 shadow-xl flex items-center justify-center shrink-0 group hover:border-[#ff7700] transition-colors">
+                  <div className="relative z-10 w-12 sm:w-14 h-12 sm:h-14 rounded-2xl bg-[#101c30] border-2 border-[#00bfff] shadow-[0_0_15px_rgba(0,191,255,0.15)] flex items-center justify-center shrink-0 text-white">
                     {stage.icon}
                   </div>
 
-                  {/* Stage Content Card */}
-                  <div className="flex-1 p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 shadow-md space-y-2 transition">
+                  {/* Stage Content Card with Framer Motion reveal */}
+                  <motion.div
+                    className="flex-1 p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 shadow-md space-y-2 transition"
+                    initial={{ opacity: 0, y: 25 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: false, amount: 0.25 }}
+                    transition={{ duration: 0.45, delay: 0.05 }}
+                  >
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-mono font-extrabold text-[#ff7700]">
@@ -624,12 +644,12 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
                     <p className="text-xs text-slate-400 leading-relaxed">
                       {stage.description}
                     </p>
-                  </div>
+                  </motion.div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        </section>
 
         {/* ========================================================================= */}
         {/* FREE-ONLY ZERO-COST GUARANTEE & CLOSING CALL TO ACTION                   */}

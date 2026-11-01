@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Component, ErrorInfo, ReactNode } from 'react';
 import {
   LocationWeatherData,
   HourlyForecastItem,
@@ -22,7 +22,6 @@ import {
   Wind,
   Droplets,
   Thermometer,
-  Compass,
   Search,
   MapPin,
   LocateFixed,
@@ -38,18 +37,67 @@ import {
   Globe,
   Newspaper,
   Filter,
-  ChevronRight,
-  Eye,
   Activity,
   ShieldAlert,
-  Trash2,
-  CheckCircle,
+  CheckCircle2,
+  Bell,
+  Waves,
 } from 'lucide-react';
 
 interface WeatherNewsHubProps {
   userLocation?: [number, number];
   sharedLocation?: SharedLocationState;
   onUpdateSharedLocation?: (loc: SharedLocationState) => void;
+  isAdmin?: boolean;
+}
+
+// Built-in Error Boundary to prevent page from ever opening blank
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+class WeatherErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('WeatherNewsHub ErrorBoundary caught an exception:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="w-full h-full flex flex-col items-center justify-center p-8 bg-slate-950 text-slate-100 text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Weather & News Recovery Console</h2>
+          <p className="text-xs text-slate-400 max-w-md">
+            A temporary component rendering error was intercepted. Click below to reset to the default Avadi Basin weather configuration.
+          </p>
+          <button
+            onClick={() => {
+              try {
+                localStorage.removeItem('floodguard_preferred_weather_location');
+              } catch {}
+              this.setState({ hasError: false });
+              window.location.reload();
+            }}
+            className="px-4 py-2 rounded-xl bg-[#ff7700] hover:bg-[#ff8811] text-white text-xs font-bold transition shadow"
+          >
+            Reset Weather & News Hub
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 const DEFAULT_LOCATION = {
@@ -60,15 +108,48 @@ const DEFAULT_LOCATION = {
   country: 'India',
 };
 
+function normalizeLocation(raw: any, fallbackUserLocation?: [number, number]): {
+  lat: number;
+  lon: number;
+  city: string;
+  region: string;
+  country: string;
+} {
+  if (!raw) {
+    if (fallbackUserLocation && fallbackUserLocation[0] && fallbackUserLocation[1]) {
+      return {
+        lat: fallbackUserLocation[0],
+        lon: fallbackUserLocation[1],
+        city: 'Your GPS Vicinity',
+        region: 'Tamil Nadu',
+        country: 'India',
+      };
+    }
+    return DEFAULT_LOCATION;
+  }
 
-// Client-side WMO Weather Code interpreter for direct Open-Meteo fallback
+  const lat = Number(raw.lat ?? raw.latitude);
+  const lon = Number(raw.lon ?? raw.longitude ?? raw.lng);
+  const city = String(raw.city ?? raw.placeName ?? raw.name ?? DEFAULT_LOCATION.city);
+  const region = String(raw.region ?? raw.administrativeRegion ?? raw.admin1 ?? DEFAULT_LOCATION.region);
+  const country = String(raw.country ?? DEFAULT_LOCATION.country);
+
+  return {
+    lat: isNaN(lat) ? DEFAULT_LOCATION.lat : lat,
+    lon: isNaN(lon) ? DEFAULT_LOCATION.lon : lon,
+    city,
+    region,
+    country,
+  };
+}
+
 function getClientWmoInfo(code: number): { condition: string; icon: string } {
   switch (code) {
     case 0: return { condition: 'Clear Sky', icon: 'Sun' };
     case 1: return { condition: 'Mainly Clear', icon: 'SunDim' };
     case 2: return { condition: 'Partly Cloudy', icon: 'CloudSun' };
     case 3: return { condition: 'Overcast', icon: 'Cloud' };
-    case 45: case 48: return { condition: 'Fog & Depositing Rime Fog', icon: 'CloudFog' };
+    case 45: case 48: return { condition: 'Fog & Mist', icon: 'CloudFog' };
     case 51: return { condition: 'Light Drizzle', icon: 'CloudDrizzle' };
     case 53: return { condition: 'Moderate Drizzle', icon: 'CloudDrizzle' };
     case 55: return { condition: 'Dense Drizzle', icon: 'CloudDrizzle' };
@@ -98,155 +179,6 @@ function getClientWindCardinal(deg: number): string {
   return dirs[idx];
 }
 
-const RESILIENT_LOCAL_BULLETINS: WeatherNewsArticle[] = [
-  {
-    id: 'LOCAL-IMD-CHENNAI-01',
-    headline: 'IMD Regional Weather Bulletin: Moderate to Heavy Rainfall Warning Issued Across Coastal & North Tamil Nadu',
-    publisher: 'India Meteorological Department (RMC Chennai)',
-    sourceUrl: 'https://mausam.imd.gov.in/chennai/',
-    publishedDate: 'Today',
-    timezoneLabel: 'IST',
-    locationOrRegion: 'Local Basin',
-    publishedAt: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
-    snippet: 'A low-pressure trough over Southwest Bay of Bengal is bringing widespread convective rainfall and isolated heavy downpours across Chennai, Tiruvallur, and Kanchipuram districts.',
-    category: 'CYCLONES_HURRICANES',
-    region: 'ASIA_PACIFIC',
-  },
-  {
-    id: 'LOCAL-WRD-CHEMBARAMBAKKAM-02',
-    headline: 'Water Resources Dept: Chembarambakkam, Poondi and Red Hills Reservoirs Inflow & Discharge Monitored 24x7',
-    publisher: 'Water Resources Department, Tamil Nadu',
-    sourceUrl: 'https://wrd.tn.gov.in/',
-    publishedDate: 'Today',
-    timezoneLabel: 'IST',
-    locationOrRegion: 'Local Basin',
-    publishedAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
-    snippet: 'Continuous catchment inflow monitored at Chembarambakkam Reservoir. Sluice gates calibrated to ensure safe reservoir buffer ahead of active monsoon spell.',
-    category: 'EXTREME_RAIN_FLOOD',
-    region: 'ASIA_PACIFIC',
-  },
-  {
-    id: 'LOCAL-TNIE-MONSOON-03',
-    headline: 'Northeast Monsoon Active: Thunderstorms and Squally Winds Expected in Chennai and Avadi Basin',
-    publisher: 'The New Indian Express',
-    sourceUrl: 'https://www.newindianexpress.com/cities/chennai',
-    publishedDate: 'Today',
-    timezoneLabel: 'IST',
-    locationOrRegion: 'Local Basin',
-    publishedAt: new Date(Date.now() - 150 * 60 * 1000).toISOString(),
-    snippet: 'Weather department advises residents in low-lying coastal and lake-adjacent areas to stay updated on rainfall advisories as gusty winds of 40-50 km/h persist.',
-    category: 'SEVERE_STORMS',
-    region: 'ASIA_PACIFIC',
-  },
-  {
-    id: 'LOCAL-TNSDMA-ADVISORY-04',
-    headline: 'Tamil Nadu State Disaster Management Authority (TNSDMA) Activates 24x7 Emergency Monsoon Desk',
-    publisher: 'TNSDMA Official',
-    sourceUrl: 'https://tnsdma.tn.gov.in/',
-    publishedDate: 'Today',
-    timezoneLabel: 'IST',
-    locationOrRegion: 'Local Basin',
-    publishedAt: new Date(Date.now() - 240 * 60 * 1000).toISOString(),
-    snippet: 'TNSDMA control rooms are coordinating with NDRF and SDRF tactical units for rapid waterlogging response across the Chennai Metropolitan Area.',
-    category: 'METEOROLOGY_GENERAL',
-    region: 'ASIA_PACIFIC',
-  },
-  {
-    id: 'LOCAL-THEHINDU-05',
-    headline: 'GCC Deploys Heavy-Duty De-watering Pumps Across Vulnerable River Corridors and Underpasses',
-    publisher: 'The Hindu',
-    sourceUrl: 'https://www.thehindu.com/news/cities/chennai/',
-    publishedDate: 'Today',
-    timezoneLabel: 'IST',
-    locationOrRegion: 'Local Basin',
-    publishedAt: new Date(Date.now() - 360 * 60 * 1000).toISOString(),
-    snippet: 'Civic authorities inspect flood-mitigation pumps and stormwater channels across Ambattur, Avadi, and Kolathur to prevent water stagnation.',
-    category: 'EXTREME_RAIN_FLOOD',
-    region: 'ASIA_PACIFIC',
-  },
-  {
-    id: 'LOCAL-IMD-FISHERMEN-06',
-    headline: 'IMD Coastal Warning: Squally Winds up to 55 km/h Expected over Tamil Nadu & Puducherry Coast',
-    publisher: 'IMD Coastal Bulletin',
-    sourceUrl: 'https://mausam.imd.gov.in/',
-    publishedDate: 'Today',
-    timezoneLabel: 'IST',
-    locationOrRegion: 'Local Basin',
-    publishedAt: new Date(Date.now() - 480 * 60 * 1000).toISOString(),
-    snippet: 'Fishermen are advised not to venture into southwest and west-central Bay of Bengal due to squally weather conditions and rough sea surface states.',
-    category: 'METEOROLOGY_GENERAL',
-    region: 'ASIA_PACIFIC',
-  },
-];
-
-const RESILIENT_GLOBAL_BULLETINS: WeatherNewsArticle[] = [
-  {
-    id: 'GLOBAL-WMO-01',
-    headline: 'World Meteorological Organization: Global Climate Indicators Highlight Rising Extreme Rainfall Patterns',
-    publisher: 'World Meteorological Organization (WMO)',
-    sourceUrl: 'https://wmo.int/news',
-    publishedDate: 'Today',
-    timezoneLabel: 'IST',
-    locationOrRegion: 'Local Basin',
-    publishedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    snippet: 'WMO report emphasizes importance of multi-hazard early warning systems and localized hydrological modeling to protect vulnerable communities worldwide.',
-    category: 'METEOROLOGY_GENERAL',
-    region: 'GLOBAL',
-  },
-  {
-    id: 'GLOBAL-RELIEFWEB-02',
-    headline: 'ReliefWeb Flash Update: Tropical Weather and Flood Response Operations Across Bay of Bengal & Indian Ocean',
-    publisher: 'ReliefWeb / UN OCHA',
-    sourceUrl: 'https://reliefweb.int/disasters',
-    publishedDate: 'Today',
-    timezoneLabel: 'IST',
-    locationOrRegion: 'Local Basin',
-    publishedAt: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
-    snippet: 'Humanitarian coordination teams track regional flood patterns and community evacuation readiness across South and Southeast Asian river basins.',
-    category: 'CYCLONES_HURRICANES',
-    region: 'ASIA_PACIFIC',
-  },
-  {
-    id: 'GLOBAL-NOAA-03',
-    headline: 'NOAA National Hurricane Center: Global Tropical Disturbance Tracking & Sea Surface Temperature Analysis',
-    publisher: 'NOAA NHC',
-    sourceUrl: 'https://www.nhc.noaa.gov/',
-    publishedDate: 'Today',
-    timezoneLabel: 'IST',
-    locationOrRegion: 'Local Basin',
-    publishedAt: new Date(Date.now() - 180 * 60 * 1000).toISOString(),
-    snippet: 'Meteorologists monitor active tropical convective waves with potential for tropical storm and cyclonic intensification in equatorial waters.',
-    category: 'CYCLONES_HURRICANES',
-    region: 'AMERICAS',
-  },
-  {
-    id: 'GLOBAL-BBC-04',
-    headline: 'BBC Extreme Weather Watch: Severe River Floods and Storm Warnings Impact Low-Lying European Basins',
-    publisher: 'BBC Weather',
-    sourceUrl: 'https://www.bbc.com/weather',
-    publishedDate: 'Today',
-    timezoneLabel: 'IST',
-    locationOrRegion: 'Local Basin',
-    publishedAt: new Date(Date.now() - 300 * 60 * 1000).toISOString(),
-    snippet: 'Intense atmospheric rivers trigger localized flash floods and emergency river barrier deployments across multiple European river catchments.',
-    category: 'EXTREME_RAIN_FLOOD',
-    region: 'EUROPE',
-  },
-  {
-    id: 'GLOBAL-REUTERS-05',
-    headline: 'Disaster Relief Teams Deploy in East Africa Following Heavy Inundation and River Overflow',
-    publisher: 'Reuters Global News',
-    sourceUrl: 'https://www.reuters.com/',
-    publishedDate: 'Today',
-    timezoneLabel: 'IST',
-    locationOrRegion: 'Local Basin',
-    publishedAt: new Date(Date.now() - 420 * 60 * 1000).toISOString(),
-    snippet: 'Emergency evacuation corridors activated as seasonal rains cause watercourses to swell, requiring boat and high-clearance truck rescues.',
-    category: 'EXTREME_RAIN_FLOOD',
-    region: 'AFRICA_MIDDLE_EAST',
-  },
-];
-
 const PRESET_QUICK_CITIES = [
   { name: 'Chennai', region: 'Tamil Nadu', lat: 13.0827, lon: 80.2707, country: 'India' },
   { name: 'Avadi Basin', region: 'Tamil Nadu', lat: 13.1143, lon: 80.1015, country: 'India' },
@@ -258,163 +190,94 @@ const PRESET_QUICK_CITIES = [
   { name: 'Delhi NCR', region: 'Delhi', lat: 28.6139, lon: 77.2090, country: 'India' },
 ];
 
-export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sharedLocation, onUpdateSharedLocation }) => {
-  // Load preferred location from localStorage if saved
+export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({
+  userLocation,
+  sharedLocation,
+  onUpdateSharedLocation,
+  isAdmin = false,
+}) => {
+  return (
+    <WeatherErrorBoundary>
+      <WeatherNewsHubContent
+        userLocation={userLocation}
+        sharedLocation={sharedLocation}
+        onUpdateSharedLocation={onUpdateSharedLocation}
+        isAdmin={isAdmin}
+      />
+    </WeatherErrorBoundary>
+  );
+};
+
+const WeatherNewsHubContent: React.FC<WeatherNewsHubProps> = ({
+  userLocation,
+  sharedLocation,
+  onUpdateSharedLocation,
+}) => {
+  // 1. Location state: robustly normalized
   const [selectedLocation, setSelectedLocation] = useState(() => {
     try {
       const stored = localStorage.getItem('floodguard_preferred_weather_location');
       if (stored) {
-        return JSON.parse(stored);
+        return normalizeLocation(JSON.parse(stored), userLocation);
       }
-    } catch (e) {
-      console.warn('Could not read preferred weather location:', e);
+    } catch {}
+    if (sharedLocation) {
+      return normalizeLocation(sharedLocation, userLocation);
     }
-    if (userLocation && userLocation[0] && userLocation[1]) {
-      return {
-        lat: userLocation[0],
-        lon: userLocation[1],
-        city: 'Your GPS Vicinity',
-        region: 'Tamil Nadu',
-        country: 'India',
-      };
-    }
-    return DEFAULT_LOCATION;
+    return normalizeLocation(null, userLocation);
   });
 
-  const [activeSubTab, setActiveSubTab] = useState<'DASHBOARD' | 'WEATHER' | 'LOCAL_NEWS' | 'GLOBAL_NEWS' | 'HYDRO_PREDICTION'>('DASHBOARD');
+  const locLat = selectedLocation.lat;
+  const locLon = selectedLocation.lon;
+  const locCity = selectedLocation.city;
+  const locRegion = selectedLocation.region;
+  const locCountry = selectedLocation.country;
 
-  // Weather state
-
-  // Hydrological Prediction State & SQLite History
-  const [predPrecip, setPredPrecip] = useState(35.0);
-  const [predSat, setPredSat] = useState(80.0);
-  const [predInflow, setPredInflow] = useState(12000.0);
-  const [predElevation, setPredElevation] = useState(14.8);
-  const [predCurrentDepth, setPredCurrentDepth] = useState(8.0);
-  const [predLocationName, setPredLocationName] = useState('Avadi Catchment Basin');
-  const [predCalculating, setPredCalculating] = useState(false);
-  const [predResult, setPredResult] = useState<any>(null);
-  const [predHistory, setPredHistory] = useState<any[]>([]);
-  const [predHistoryLoading, setPredHistoryLoading] = useState(false);
-
-  const fetchPredictionHistory = async () => {
-    setPredHistoryLoading(true);
-    try {
-      const res = await fetch('/api/prediction/history?limit=25');
-      if (res.ok) {
-        const data = await res.json();
-        setPredHistory(data);
-      }
-    } catch (e) {
-      console.warn('Failed to fetch prediction history:', e);
-    } finally {
-      setPredHistoryLoading(false);
-    }
-  };
-
-  const handleRunPrediction = async () => {
-    setPredCalculating(true);
-    try {
-      const res = await fetch('/api/prediction/flood', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          precipitation_mm_h: Number(predPrecip),
-          soil_saturation_pct: Number(predSat),
-          catchment_inflow_cusecs: Number(predInflow),
-          elevation_m: Number(predElevation),
-          current_depth_cm: Number(predCurrentDepth),
-          location_name: predLocationName || 'Local Catchment Basin',
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPredResult(data);
-        fetchPredictionHistory();
-      }
-    } catch (e) {
-      console.error('Prediction calculation failed:', e);
-    } finally {
-      setPredCalculating(false);
-    }
-  };
-
-  const handleDeletePrediction = async (id: string) => {
-    try {
-      const res = await fetch(`/api/prediction/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setPredHistory((prev) => prev.filter((p) => p.id !== id));
-      }
-    } catch (e) {
-      console.error('Failed to delete prediction record:', e);
-    }
-  };
-
-  useEffect(() => {
-    fetchPredictionHistory();
-  }, []);
-
+  // 2. Weather state
   const [weatherData, setWeatherData] = useState<LocationWeatherData | null>(null);
-  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherLoading, setWeatherLoading] = useState<boolean>(true);
   const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [weatherCachedAt, setWeatherCachedAt] = useState<string | null>(null);
 
-  // Search state
+  // 3. News states
+  const [newsCategory, setNewsCategory] = useState<'all' | 'chennai' | 'tamilnadu' | 'flood_alerts' | 'disaster_mgmt'>('all');
+  const [newsArticles, setNewsArticles] = useState<WeatherNewsArticle[]>([]);
+  const [newsLoading, setNewsLoading] = useState<boolean>(true);
+  const [newsError, setNewsError] = useState<string | null>(null);
+  const [newsCachedAt, setNewsCachedAt] = useState<string | null>(null);
+  const [newsSearch, setNewsSearch] = useState<string>('');
+  const [visibleCount, setVisibleCount] = useState<number>(9);
+
+  // 4. Search and UI state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<CitySearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [gpsStatus, setGpsStatus] = useState<string | null>(null);
-
-  // News states
-  const [localNews, setLocalNews] = useState<WeatherNewsArticle[]>([]);
-  const [localNewsLoading, setLocalNewsLoading] = useState(false);
-  const [localNewsError, setLocalNewsError] = useState<string | null>(null);
-  const [localCategoryFilter, setLocalCategoryFilter] = useState<WeatherNewsCategory>('ALL');
-  const [localNewsSearch, setLocalNewsSearch] = useState('');
-  const [localVisibleCount, setLocalVisibleCount] = useState(6);
-
-  const [globalNews, setGlobalNews] = useState<WeatherNewsArticle[]>([]);
-  const [globalNewsLoading, setGlobalNewsLoading] = useState(false);
-  const [globalNewsError, setGlobalNewsError] = useState<string | null>(null);
-  const [globalRegionFilter, setGlobalRegionFilter] = useState<WeatherNewsRegion>('ALL');
-  const [globalCategoryFilter, setGlobalCategoryFilter] = useState<WeatherNewsCategory>('ALL');
-  const [globalNewsSearch, setGlobalNewsSearch] = useState('');
-  const [globalVisibleCount, setGlobalVisibleCount] = useState(8);
-
+  const [activeTab, setActiveTab] = useState<'ALL' | 'WEATHER' | 'NEWS'>('ALL');
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<string>('');
 
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const weatherReqIdRef = useRef(0);
-  const localNewsReqIdRef = useRef(0);
-  const globalNewsReqIdRef = useRef(0);
-  const weatherClientCache = useRef<Map<string, { data: LocationWeatherData; timestamp: number }>>(new Map());
+  const newsReqIdRef = useRef(0);
 
-  // Synchronize with external SharedLocationState when updated
+  // Synchronize with external SharedLocationState when parent updates it
   useEffect(() => {
     if (sharedLocation && sharedLocation.latitude && sharedLocation.longitude) {
-      setSelectedLocation((prev: any) => {
+      setSelectedLocation((prev) => {
         if (
-          prev.lat === sharedLocation.latitude &&
-          prev.lon === sharedLocation.longitude &&
+          Math.abs(prev.lat - sharedLocation.latitude) < 0.0001 &&
+          Math.abs(prev.lon - sharedLocation.longitude) < 0.0001 &&
           prev.city === sharedLocation.placeName
         ) {
           return prev;
         }
-        return {
-          lat: sharedLocation.latitude,
-          lon: sharedLocation.longitude,
-          city: sharedLocation.placeName,
-          region: sharedLocation.administrativeRegion || '',
-          country: sharedLocation.country,
-          countryCode: sharedLocation.countryCode,
-          timezone: sharedLocation.timezone,
-        };
+        return normalizeLocation(sharedLocation);
       });
     }
   }, [sharedLocation]);
 
-  // Close search dropdown on click outside
+  // Click outside to dismiss search dropdown
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
@@ -425,263 +288,194 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Fetch weather data for selected coordinates with resilient direct fallback & stale request prevention
+  // Fetch Weather with SQLite Backend & Direct Open-Meteo Fallback
   const fetchWeather = async (lat: number, lon: number, city: string, region: string, country: string) => {
-    const currentReqId = ++weatherReqIdRef.current;
-    const cacheKey = `${lat.toFixed(3)},${lon.toFixed(3)}`;
-
-    // Check client-side in-memory cache first (10 min TTL)
-    const cached = weatherClientCache.current.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp < 10 * 60 * 1000)) {
-      setWeatherData(cached.data);
-      setWeatherLoading(false);
-      setWeatherError(null);
-      setLastRefreshedAt(new Date(cached.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      return;
-    }
-
+    const reqId = ++weatherReqIdRef.current;
     setWeatherLoading(true);
     setWeatherError(null);
-    let weatherLoaded = false;
 
-    // 1. Try Backend Proxy (/api/weather)
+    // 1. Try Backend Proxy with SQLite Caching (/api/weather)
     try {
-      const res = await fetch(
-        `/api/weather?lat=${lat}&lon=${lon}&city=${encodeURIComponent(city)}&region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`
-      );
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
+      const q = new URLSearchParams({
+        lat: String(lat),
+        lon: String(lon),
+        city: city || 'Local Basin',
+        region: region || '',
+        country: country || 'India',
+      });
+      const res = await fetch(`/api/weather?${q.toString()}`);
+      if (res.ok) {
         const data: LocationWeatherData = await res.json();
-        if (data && data.current) {
-          if (currentReqId === weatherReqIdRef.current) {
-            weatherClientCache.current.set(cacheKey, { data, timestamp: Date.now() });
-            setWeatherData(data);
-            setWeatherError(null);
-            setLastRefreshedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-            setWeatherLoading(false);
-          }
-          weatherLoaded = true;
+        if (reqId === weatherReqIdRef.current && data && data.current) {
+          setWeatherData(data);
+          setWeatherError(null);
+          setWeatherCachedAt(data.isCached ? (data.lastUpdated || 'Cached') : null);
+          setWeatherLoading(false);
           return;
         }
       }
-    } catch (backendErr) {
-      console.warn('Backend /api/weather unavailable, attempting direct Open-Meteo client fetch:', backendErr);
+    } catch (e) {
+      console.warn('Backend /api/weather unavailable, attempting direct Open-Meteo fetch:', e);
     }
 
-    // 2. Direct Open-Meteo Client Fallback (CORS enabled by Open-Meteo)
-    if (!weatherLoaded) {
-      try {
-        const directUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,weather_code,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=auto&forecast_days=7`;
-        const res = await fetch(directUrl);
-        if (res.ok) {
-          const data: any = await res.json();
-          const currentCode = data.current?.weather_code ?? 0;
-          const currentInfo = getClientWmoInfo(currentCode);
-          const currentWindDir = data.current?.wind_direction_10m ?? 0;
+    // 2. Direct Open-Meteo Fallback (Free, Non-Commercial Public API)
+    try {
+      const directUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,weather_code,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=auto&forecast_days=7`;
+      const res = await fetch(directUrl);
+      if (res.ok) {
+        const raw: any = await res.json();
+        const curr = raw.current || {};
+        const code = curr.weather_code ?? 0;
+        const wInfo = getClientWmoInfo(code);
+        const windDir = curr.wind_direction_10m ?? 0;
 
-          // Build 24-hour hourly forecast
-          const hourlyList: HourlyForecastItem[] = [];
-          const hourlyTimes: string[] = data.hourly?.time || [];
-          const currentIsoTime = data.current?.time || '';
-          let startIndex = hourlyTimes.findIndex((t: string) => t >= currentIsoTime);
-          if (startIndex < 0) startIndex = 0;
+        // Hourly (24 hours)
+        const hourlyTimes: string[] = raw.hourly?.time || [];
+        const currentIsoTime = curr.time || '';
+        let startIdx = hourlyTimes.findIndex((t: string) => t >= currentIsoTime);
+        if (startIdx < 0) startIdx = 0;
 
-          for (let i = startIndex; i < Math.min(startIndex + 24, hourlyTimes.length); i++) {
-            const code = data.hourly?.weather_code?.[i] ?? 0;
-            const info = getClientWmoInfo(code);
-            const rawTime = hourlyTimes[i];
-            const hourDate = new Date(rawTime);
-            const hourLabel = isNaN(hourDate.getTime()) ? rawTime.slice(11, 16) : hourDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const hourlyList: HourlyForecastItem[] = [];
+        for (let i = startIdx; i < Math.min(startIdx + 24, hourlyTimes.length); i++) {
+          const hCode = raw.hourly?.weather_code?.[i] ?? 0;
+          const hInfo = getClientWmoInfo(hCode);
+          const rawT = hourlyTimes[i];
+          hourlyList.push({
+            time: rawT,
+            hourLabel: rawT.slice(11, 16),
+            temperature: Number((raw.hourly?.temperature_2m?.[i] ?? 0).toFixed(1)),
+            humidity: Number((raw.hourly?.relative_humidity_2m?.[i] ?? 0).toFixed(0)),
+            precipitationProbability: Number((raw.hourly?.precipitation_probability?.[i] ?? 0).toFixed(0)),
+            precipitation: Number((raw.hourly?.precipitation?.[i] ?? 0).toFixed(1)),
+            weatherCode: hCode,
+            weatherCondition: hInfo.condition,
+            iconName: hInfo.icon,
+            windSpeed: Number((raw.hourly?.wind_speed_10m?.[i] ?? 0).toFixed(1)),
+          });
+        }
 
-            hourlyList.push({
-              time: rawTime,
-              hourLabel,
-              temperature: Number((data.hourly?.temperature_2m?.[i] ?? 0).toFixed(1)),
-              humidity: Number((data.hourly?.relative_humidity_2m?.[i] ?? 0).toFixed(0)),
-              precipitationProbability: Number((data.hourly?.precipitation_probability?.[i] ?? 0).toFixed(0)),
-              precipitation: Number((data.hourly?.precipitation?.[i] ?? 0).toFixed(1)),
-              weatherCode: code,
-              weatherCondition: info.condition,
-              iconName: info.icon,
-              windSpeed: Number((data.hourly?.wind_speed_10m?.[i] ?? 0).toFixed(1)),
-            });
-          }
+        // Daily (7 days)
+        const dailyTimes: string[] = raw.daily?.time || [];
+        const dailyList: DailyForecastItem[] = [];
+        for (let i = 0; i < dailyTimes.length; i++) {
+          const dCode = raw.daily?.weather_code?.[i] ?? 0;
+          const dInfo = getClientWmoInfo(dCode);
+          const dDate = dailyTimes[i];
+          const dt = new Date(dDate);
+          const dayLabel = i === 0 ? 'Today' : isNaN(dt.getTime()) ? dDate : dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
-          // Build 7-day daily forecast
-          const dailyList: DailyForecastItem[] = [];
-          const dailyTimes: string[] = data.daily?.time || [];
-          for (let i = 0; i < dailyTimes.length; i++) {
-            const code = data.daily?.weather_code?.[i] ?? 0;
-            const info = getClientWmoInfo(code);
-            const dateStr = dailyTimes[i];
-            const dateObj = new Date(dateStr);
-            const dayLabel = i === 0 ? 'Today' : isNaN(dateObj.getTime()) ? dateStr : dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          dailyList.push({
+            date: dDate,
+            dayLabel,
+            weatherCode: dCode,
+            weatherCondition: dInfo.condition,
+            iconName: dInfo.icon,
+            tempMax: Number((raw.daily?.temperature_2m_max?.[i] ?? 0).toFixed(1)),
+            tempMin: Number((raw.daily?.temperature_2m_min?.[i] ?? 0).toFixed(1)),
+            precipitationSum: Number((raw.daily?.precipitation_sum?.[i] ?? 0).toFixed(1)),
+            precipitationProbabilityMax: Number((raw.daily?.precipitation_probability_max?.[i] ?? 0).toFixed(0)),
+            windSpeedMax: Number((raw.daily?.wind_speed_10m_max?.[i] ?? 0).toFixed(1)),
+          });
+        }
 
-            dailyList.push({
-              date: dateStr,
-              dayLabel,
-              weatherCode: code,
-              weatherCondition: info.condition,
-              iconName: info.icon,
-              tempMax: Number((data.daily?.temperature_2m_max?.[i] ?? 0).toFixed(1)),
-              tempMin: Number((data.daily?.temperature_2m_min?.[i] ?? 0).toFixed(1)),
-              precipitationSum: Number((data.daily?.precipitation_sum?.[i] ?? 0).toFixed(1)),
-              precipitationProbabilityMax: Number((data.daily?.precipitation_probability_max?.[i] ?? 0).toFixed(0)),
-              windSpeedMax: Number((data.daily?.wind_speed_10m_max?.[i] ?? 0).toFixed(1)),
-            });
-          }
+        const parsed: LocationWeatherData = {
+          success: true,
+          provider: 'Open-Meteo Direct API',
+          providerUrl: 'https://open-meteo.com/',
+          isModelForecast: true,
+          lastUpdated: new Date().toISOString(),
+          location: { lat, lon, city, region, country },
+          current: {
+            temperature: Number((curr.temperature_2m ?? 0).toFixed(1)),
+            apparentTemperature: Number((curr.apparent_temperature ?? curr.temperature_2m ?? 0).toFixed(1)),
+            humidity: Number((curr.relative_humidity_2m ?? 0).toFixed(0)),
+            weatherCode: code,
+            weatherCondition: wInfo.condition,
+            iconName: wInfo.icon,
+            precipitation: Number((curr.precipitation ?? 0).toFixed(1)),
+            rain: Number((curr.rain ?? 0).toFixed(1)),
+            windSpeed: Number((curr.wind_speed_10m ?? 0).toFixed(1)),
+            windDirection: windDir,
+            windDirectionCardinal: getClientWindCardinal(windDir),
+            isDay: Boolean(curr.is_day),
+            timestamp: curr.time || new Date().toISOString(),
+          },
+          hourly: hourlyList,
+          daily: dailyList,
+        };
 
-          const parsedData: LocationWeatherData = {
-            success: true,
-            provider: 'Open-Meteo Direct Meteorological API',
-            providerUrl: 'https://open-meteo.com/',
-            isModelForecast: true,
-            lastUpdated: new Date().toISOString(),
-            location: { lat, lon, city, region, country },
-            current: {
-              temperature: Number((data.current?.temperature_2m ?? 0).toFixed(1)),
-              apparentTemperature: Number((data.current?.apparent_temperature ?? 0).toFixed(1)),
-              humidity: Number((data.current?.relative_humidity_2m ?? 0).toFixed(0)),
-              weatherCode: currentCode,
-              weatherCondition: currentInfo.condition,
-              iconName: currentInfo.icon,
-              precipitation: Number((data.current?.precipitation ?? 0).toFixed(1)),
-              rain: Number((data.current?.rain ?? 0).toFixed(1)),
-              windSpeed: Number((data.current?.wind_speed_10m ?? 0).toFixed(1)),
-              windDirection: currentWindDir,
-              windDirectionCardinal: getClientWindCardinal(currentWindDir),
-              isDay: Boolean(data.current?.is_day),
-              timestamp: data.current?.time || new Date().toISOString(),
-            },
-            hourly: hourlyList,
-            daily: dailyList,
-          };
-
-          if (currentReqId === weatherReqIdRef.current) {
-            weatherClientCache.current.set(cacheKey, { data: parsedData, timestamp: Date.now() });
-            setWeatherData(parsedData);
-            setWeatherError(null);
-            setLastRefreshedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-            setWeatherLoading(false);
-          }
-          weatherLoaded = true;
+        if (reqId === weatherReqIdRef.current) {
+          setWeatherData(parsed);
+          setWeatherError(null);
+          setWeatherCachedAt(null);
+          setWeatherLoading(false);
           return;
         }
-      } catch (directErr) {
-        console.warn('Direct Open-Meteo fetch error:', directErr);
       }
+    } catch (e) {
+      console.warn('Direct Open-Meteo fetch error:', e);
     }
 
-    // 3. Clean error state when all live sources fail (No fake fallback numbers)
-    if (!weatherLoaded && currentReqId === weatherReqIdRef.current) {
+    if (reqId === weatherReqIdRef.current) {
       setWeatherData(null);
-      setWeatherError(`Unable to retrieve live forecast from Open-Meteo for "${city}". Please check network connection.`);
+      setWeatherError('Weather data is temporarily unavailable. Check your connection or retry.');
       setWeatherLoading(false);
     }
   };
 
-  // Fetch local weather news for city / region with dynamic location filtering & stale request prevention
-  const fetchLocalNews = async (city: string, region: string, country?: string, countryCode?: string, timezone?: string) => {
-    const currentReqId = ++localNewsReqIdRef.current;
-    setLocalNewsLoading(true);
-    setLocalNewsError(null);
-    let loaded = false;
+  // Fetch News from Free Backend RSS Feeds
+  const fetchNews = async (cat: string = newsCategory) => {
+    const reqId = ++newsReqIdRef.current;
+    setNewsLoading(true);
+    setNewsError(null);
 
     try {
-      const qParams = new URLSearchParams({
-        query: city,
-        region: region || '',
-        country: country || 'India',
-        countryCode: countryCode || '',
-        timezone: timezone || '',
-      });
-      const res = await fetch(`/api/weather/news/local?${qParams.toString()}`);
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
+      const res = await fetch(`/api/news?category=${encodeURIComponent(cat)}&limit=50`);
+      if (res.ok) {
         const data = await res.json();
-        if (currentReqId === localNewsReqIdRef.current) {
-          if (Array.isArray(data.articles)) {
-            setLocalNews(data.articles);
-            setLocalNewsError(null);
-            loaded = true;
+        if (reqId === newsReqIdRef.current) {
+          if (Array.isArray(data.articles) && data.articles.length > 0) {
+            setNewsArticles(data.articles);
+            setNewsError(null);
+            setNewsCachedAt(data.isCached ? (data.lastUpdated || 'Cached') : null);
+            setNewsLoading(false);
+            return;
           }
         }
       }
-    } catch (err) {
-      console.warn('Local weather news fetch warning:', err);
+    } catch (e) {
+      console.warn('Fetch /api/news warning:', e);
     }
 
-    if (!loaded && currentReqId === localNewsReqIdRef.current) {
-      // If the location is in the Chennai/Tamil Nadu basin, use genuine public bulletins
-      if (/chennai|avadi|tamil nadu|ambattur/i.test(`${city} ${region} ${country}`)) {
-        setLocalNews(RESILIENT_LOCAL_BULLETINS);
-      } else {
-        // Genuine empty state for international locations when feed returns no hits (No fake news)
-        setLocalNews([]);
-      }
-    }
-
-    if (currentReqId === localNewsReqIdRef.current) {
-      setLocalNewsLoading(false);
-    }
-  };
-
-  // Fetch global weather news with resilient fallback
-  const fetchGlobalNews = async () => {
-    setGlobalNewsLoading(true);
-    setGlobalNewsError(null);
-    let loaded = false;
-
+    // Try fallback to /api/weather/news/local if /api/news returned empty
     try {
-      const res = await fetch('/api/weather/news/global');
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
+      const res = await fetch(`/api/weather/news/local?query=${encodeURIComponent(locCity)}`);
+      if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.articles) && data.articles.length > 0) {
-          setGlobalNews(data.articles);
-          setGlobalNewsError(null);
-          loaded = true;
+        if (reqId === newsReqIdRef.current && Array.isArray(data.articles) && data.articles.length > 0) {
+          setNewsArticles(data.articles);
+          setNewsError(null);
+          setNewsCachedAt(data.isCached ? (data.lastUpdated || 'Cached') : null);
+          setNewsLoading(false);
           return;
         }
       }
-    } catch (err) {
-      console.warn('Backend global news fetch error, using international disaster wire:', err);
-    }
+    } catch {}
 
-    if (!loaded) {
-      setGlobalNews(RESILIENT_GLOBAL_BULLETINS);
-      setGlobalNewsError(null);
+    if (reqId === newsReqIdRef.current) {
+      setNewsArticles([]);
+      setNewsError('Currently, no news articles are available. Please try again later.');
+      setNewsLoading(false);
     }
-
-    setGlobalNewsLoading(false);
   };
 
-  // Load weather and news when selectedLocation changes
+  // Load weather and news when location changes
   useEffect(() => {
-    if (selectedLocation && selectedLocation.lat && selectedLocation.lon) {
-      fetchWeather(
-        selectedLocation.lat,
-        selectedLocation.lon,
-        selectedLocation.city,
-        selectedLocation.region || '',
-        selectedLocation.country || ''
-      );
-      fetchLocalNews(
-        selectedLocation.city,
-        selectedLocation.region || '',
-        selectedLocation.country || '',
-        selectedLocation.countryCode || '',
-        selectedLocation.timezone || ''
-      );
-    }
-  }, [selectedLocation.lat, selectedLocation.lon]);
+    fetchWeather(locLat, locLon, locCity, locRegion, locCountry);
+    fetchNews(newsCategory);
+  }, [locLat, locLon, locCity]);
 
-  // Initial load of global news
-  useEffect(() => {
-    fetchGlobalNews();
-  }, []);
-
-  // Handle City Geocoding Search Debounced
+  // Debounced geocoding search
   useEffect(() => {
     const trimmed = searchQuery.trim();
     if (trimmed.length < 2) {
@@ -689,7 +483,6 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
       setIsSearching(false);
       return;
     }
-
     setIsSearching(true);
     const timer = setTimeout(async () => {
       try {
@@ -705,193 +498,129 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
         setIsSearching(false);
       }
     }, 350);
-
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // User selects location from search dropdown
-  const handleSelectCity = (cityResult: CitySearchResult) => {
+  const handleSelectCity = (c: CitySearchResult) => {
     const newLoc = {
-      lat: Number(cityResult.latitude.toFixed(4)),
-      lon: Number(cityResult.longitude.toFixed(4)),
-      city: cityResult.name,
-      region: cityResult.admin1 || cityResult.country,
-      country: cityResult.country,
-      countryCode: cityResult.countryCode || '',
-      timezone: cityResult.timezone || '',
+      lat: Number(c.latitude.toFixed(4)),
+      lon: Number(c.longitude.toFixed(4)),
+      city: c.name,
+      region: c.admin1 || c.country,
+      country: c.country,
     };
     setSelectedLocation(newLoc);
     setSearchQuery('');
     setSearchResults([]);
     setShowSearchDropdown(false);
 
-    // Propagate single source of truth across all modules
     if (onUpdateSharedLocation) {
       onUpdateSharedLocation({
-        placeName: cityResult.name,
-        administrativeRegion: cityResult.admin1 || '',
-        country: cityResult.country,
-        countryCode: cityResult.countryCode || '',
+        placeName: c.name,
+        administrativeRegion: c.admin1 || '',
+        country: c.country,
+        countryCode: c.countryCode || '',
         latitude: newLoc.lat,
         longitude: newLoc.lon,
-        timezone: cityResult.timezone || '',
+        timezone: c.timezone || '',
         locationSource: 'SEARCH',
       });
     }
   };
 
-  // Save current city as preferred
-  const handleSavePreferred = () => {
+  const handleSaveDefault = () => {
     try {
       localStorage.setItem('floodguard_preferred_weather_location', JSON.stringify(selectedLocation));
-      setGpsStatus('Saved as your preferred default location');
+      setGpsStatus(`Saved ${locCity} as your default location`);
       setTimeout(() => setGpsStatus(null), 3000);
-    } catch (e) {
-      console.warn('LocalStorage save error:', e);
-    }
+    } catch {}
   };
 
   const isSavedAsDefault = (() => {
     try {
       const stored = localStorage.getItem('floodguard_preferred_weather_location');
       if (stored) {
-        const parsed = JSON.parse(stored);
-        return Math.abs(parsed.lat - selectedLocation.lat) < 0.01 && Math.abs(parsed.lon - selectedLocation.lon) < 0.01;
+        const parsed = normalizeLocation(JSON.parse(stored));
+        return Math.abs(parsed.lat - locLat) < 0.01 && Math.abs(parsed.lon - locLon) < 0.01;
       }
-    } catch {
-      return false;
-    }
+    } catch {}
     return false;
   })();
 
-  // Device Geolocation Handler
   const handleUseDeviceGps = () => {
     if (!('geolocation' in navigator)) {
-      setGpsStatus('Geolocation not supported by your browser');
-      setTimeout(() => setGpsStatus(null), 4000);
+      setGpsStatus('Geolocation not supported by browser');
+      setTimeout(() => setGpsStatus(null), 3500);
       return;
     }
-
-    setGpsStatus('Requesting device location coordinates...');
+    setGpsStatus('Requesting device coordinates...');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const newLoc = {
           lat: Number(pos.coords.latitude.toFixed(4)),
           lon: Number(pos.coords.longitude.toFixed(4)),
-          city: 'Your GPS Coordinates',
+          city: 'Your GPS Location',
           region: 'Local Device Area',
           country: 'Current Vicinity',
         };
         setSelectedLocation(newLoc);
-        setGpsStatus(`GPS lock acquired: ${newLoc.lat}, ${newLoc.lon}`);
+        setGpsStatus(`GPS acquired: ${newLoc.lat}°N, ${newLoc.lon}°E`);
         setTimeout(() => setGpsStatus(null), 3500);
       },
-      (err) => {
-        console.warn('Geolocation permission denied or error:', err);
-        setGpsStatus('Location permission denied or unavailable. You can search manually.');
-        setTimeout(() => setGpsStatus(null), 4500);
+      () => {
+        setGpsStatus('Location permission denied or unavailable.');
+        setTimeout(() => setGpsStatus(null), 3500);
       },
       { enableHighAccuracy: true, timeout: 8000 }
     );
   };
 
-  // Refresh All Data
   const handleRefreshAll = async () => {
     setIsRefreshingAll(true);
     await Promise.all([
-      fetchWeather(
-        selectedLocation.lat,
-        selectedLocation.lon,
-        selectedLocation.city,
-        selectedLocation.region,
-        selectedLocation.country
-      ),
-      fetchLocalNews(selectedLocation.city, selectedLocation.region),
-      fetchGlobalNews(),
+      fetchWeather(locLat, locLon, locCity, locRegion, locCountry),
+      fetchNews(newsCategory),
     ]);
     setIsRefreshingAll(false);
   };
 
-  // Weather icon selector
+  // Weather icon renderer
   const renderWeatherIcon = (iconName: string, className: string = 'w-6 h-6') => {
     switch (iconName) {
-      case 'Sun':
-        return <Sun className={`${className} text-amber-400`} />;
-      case 'SunDim':
-        return <SunDim className={`${className} text-amber-300`} />;
-      case 'CloudSun':
-        return <CloudSun className={`${className} text-amber-300`} />;
-      case 'Cloud':
-        return <Cloud className={`${className} text-slate-300`} />;
-      case 'CloudFog':
-        return <CloudFog className={`${className} text-slate-400`} />;
-      case 'CloudDrizzle':
-        return <CloudDrizzle className={`${className} text-sky-400`} />;
-      case 'CloudRain':
-        return <CloudRain className={`${className} text-blue-400`} />;
-      case 'CloudSnow':
-        return <CloudSnow className={`${className} text-cyan-200`} />;
-      case 'CloudLightning':
-        return <CloudLightning className={`${className} text-yellow-400`} />;
-      default:
-        return <CloudSun className={`${className} text-amber-300`} />;
+      case 'Sun': return <Sun className={`${className} text-amber-400`} />;
+      case 'SunDim': return <SunDim className={`${className} text-amber-300`} />;
+      case 'CloudSun': return <CloudSun className={`${className} text-amber-300`} />;
+      case 'Cloud': return <Cloud className={`${className} text-slate-300`} />;
+      case 'CloudFog': return <CloudFog className={`${className} text-slate-400`} />;
+      case 'CloudDrizzle': return <CloudDrizzle className={`${className} text-sky-400`} />;
+      case 'CloudRain': return <CloudRain className={`${className} text-blue-400`} />;
+      case 'CloudSnow': return <CloudSnow className={`${className} text-cyan-200`} />;
+      case 'CloudLightning': return <CloudLightning className={`${className} text-yellow-400`} />;
+      default: return <CloudSun className={`${className} text-amber-300`} />;
     }
   };
 
-  // Filter local news
-  const filteredLocalNews = localNews.filter((article) => {
-    if (localCategoryFilter !== 'ALL' && article.category !== localCategoryFilter) return false;
-    if (localNewsSearch.trim()) {
-      const q = localNewsSearch.toLowerCase();
-      return (
-        article.headline.toLowerCase().includes(q) ||
-        article.publisher.toLowerCase().includes(q) ||
-        (article.snippet && article.snippet.toLowerCase().includes(q))
-      );
-    }
-    return true;
+  // Filter news articles by search keyword
+  const filteredArticles = newsArticles.filter((a) => {
+    if (!newsSearch.trim()) return true;
+    const q = newsSearch.toLowerCase();
+    return (
+      a.headline.toLowerCase().includes(q) ||
+      a.publisher.toLowerCase().includes(q) ||
+      (a.snippet && a.snippet.toLowerCase().includes(q))
+    );
   });
-
-  // Filter global news
-  const filteredGlobalNews = globalNews.filter((article) => {
-    if (globalRegionFilter !== 'ALL' && article.region !== globalRegionFilter) return false;
-    if (globalCategoryFilter !== 'ALL' && article.category !== globalCategoryFilter) return false;
-    if (globalNewsSearch.trim()) {
-      const q = globalNewsSearch.toLowerCase();
-      return (
-        article.headline.toLowerCase().includes(q) ||
-        article.publisher.toLowerCase().includes(q) ||
-        article.locationOrRegion.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
-
-  // Get Category Badge Style
-  const getCategoryBadge = (cat: WeatherNewsCategory) => {
-    switch (cat) {
-      case 'CYCLONES_HURRICANES':
-        return 'bg-red-500/20 text-red-300 border-red-500/40';
-      case 'EXTREME_RAIN_FLOOD':
-        return 'bg-blue-500/20 text-blue-300 border-blue-500/40';
-      case 'HEATWAVE_DROUGHT':
-        return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
-      case 'SEVERE_STORMS':
-        return 'bg-purple-500/20 text-purple-300 border-purple-500/40';
-      default:
-        return 'bg-slate-800 text-slate-300 border-slate-700';
-    }
-  };
 
   return (
     <div className="w-full h-full flex flex-col bg-slate-950 text-slate-100 overflow-y-auto selection:bg-[#ff7700] selection:text-white">
-      {/* Top Header & Navigation Banner */}
-      <div className="p-4 sm:p-6 bg-slate-900 border-b border-slate-800 shrink-0">
+      {/* ========================================================================= */}
+      {/* SECTION 1: WEATHER OVERVIEW & LOCATION SEARCH BAR                         */}
+      {/* ========================================================================= */}
+      <header className="p-4 sm:p-6 bg-slate-900 border-b border-slate-800 shrink-0">
         <div className="max-w-7xl mx-auto space-y-4">
-          {/* Main Title & Action Bar */}
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/20">
                 <CloudSun className="w-5 h-5" />
               </div>
               <div>
@@ -904,7 +633,7 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Live atmospheric observations, 7-day model forecasts, regional meteorological bulletins & global severe weather wire.
+                  Live atmospheric telemetry, 7-day model projections, Chennai & Tamil Nadu flood bulletins, and disaster wire.
                 </p>
               </div>
             </div>
@@ -919,97 +648,50 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
                 <RefreshCw className={`w-3.5 h-3.5 text-sky-400 ${isRefreshingAll ? 'animate-spin' : ''}`} />
                 <span>{isRefreshingAll ? 'Refreshing...' : 'Refresh All'}</span>
               </button>
-
-              {lastRefreshedAt && (
-                <div className="text-[11px] font-mono text-slate-500 hidden sm:block">
-                  Updated: {lastRefreshedAt}
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Strict Informational Decoupling Notice */}
-          <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs flex items-center justify-between gap-3 text-slate-400">
-            <div className="flex items-center gap-2">
-              <Info className="w-4 h-4 text-sky-400 shrink-0" />
-              <span>
-                <strong className="text-slate-200">Informational Module:</strong> Atmospheric weather and public news feeds are provided for situational context. This data is strictly decoupled from FloodGuard's A* rescue routing, dam discharge calculations, and clinical triage engines.
-              </span>
-            </div>
-            <div className="text-[10px] font-mono text-slate-500 shrink-0 hidden md:block">
-              ISO 9241-11 Compliant
-            </div>
-          </div>
-
-          {/* Sub-Section View Selector */}
+          {/* Section Mode Switcher */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800">
               <button
-                onClick={() => setActiveSubTab('DASHBOARD')}
+                onClick={() => setActiveTab('ALL')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                  activeSubTab === 'DASHBOARD'
+                  activeTab === 'ALL'
                     ? 'bg-slate-800 text-white shadow'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <Activity className="w-3.5 h-3.5 text-[#ff7700]" />
-                <span>All-in-One Dashboard</span>
+                <span>Complete Dashboard</span>
               </button>
 
               <button
-                onClick={() => setActiveSubTab('WEATHER')}
+                onClick={() => setActiveTab('WEATHER')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                  activeSubTab === 'WEATHER'
+                  activeTab === 'WEATHER'
                     ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <CloudSun className="w-3.5 h-3.5 text-sky-400" />
-                <span>Weather in Your Location</span>
+                <span>Atmospheric Weather</span>
               </button>
 
               <button
-                onClick={() => setActiveSubTab('LOCAL_NEWS')}
+                onClick={() => setActiveTab('NEWS')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                  activeSubTab === 'LOCAL_NEWS'
+                  activeTab === 'NEWS'
                     ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <Newspaper className="w-3.5 h-3.5 text-amber-400" />
-                <span>Weather News Near You ({localNews.length})</span>
+                <span>Flood & Disaster News</span>
               </button>
-
-              <button
-                onClick={() => setActiveSubTab('GLOBAL_NEWS')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                  activeSubTab === 'GLOBAL_NEWS'
-                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Globe className="w-3.5 h-3.5 text-blue-400" />
-                <span>Global Weather News ({globalNews.length})</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveSubTab('HYDRO_PREDICTION');
-                  fetchPredictionHistory();
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                  activeSubTab === 'HYDRO_PREDICTION'
-                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-                <span>Flood Prediction & SQLite History</span>
-              </button>
-
             </div>
 
-            {/* Location Selector Bar */}
+            {/* Geocoding Search & Location Tool */}
             <div className="relative flex items-center gap-2 flex-1 max-w-md ml-auto" ref={searchBoxRef}>
               <div className="relative flex-1">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -1017,37 +699,30 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={() => {
-                    if (searchResults.length > 0) setShowSearchDropdown(true);
-                  }}
-                  placeholder="Search city (e.g. Chennai, Avadi, Delhi, Tokyo)..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                  placeholder="Search city, town or basin..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 transition"
                 />
                 {isSearching && (
-                  <div className="absolute right-3 top-2.5">
-                    <div className="w-3.5 h-3.5 border-2 border-sky-400/30 border-t-sky-400 rounded-full animate-spin"></div>
-                  </div>
+                  <div className="w-3.5 h-3.5 border-2 border-sky-400 border-t-transparent rounded-full animate-spin absolute right-3 top-2.5"></div>
                 )}
               </div>
 
-              {/* Geolocation Button */}
               <button
                 onClick={handleUseDeviceGps}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-400 transition"
-                title="Use Current Device Location (Browser GPS)"
+                className="p-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-sky-400 transition"
+                title="Use current device GPS coordinates"
               >
                 <LocateFixed className="w-4 h-4" />
               </button>
 
-              {/* Save Default Button */}
               <button
-                onClick={handleSavePreferred}
+                onClick={handleSaveDefault}
                 className={`p-2 rounded-xl border transition ${
                   isSavedAsDefault
-                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
-                    : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-400'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
                 }`}
-                title={isSavedAsDefault ? 'Current city is saved as your default' : 'Save current city as preferred default'}
+                title={isSavedAsDefault ? 'Current location is saved as your default' : 'Save current location as default'}
               >
                 {isSavedAsDefault ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
               </button>
@@ -1077,7 +752,7 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
             </div>
           </div>
 
-          {/* GPS Status Message Toast */}
+          {/* GPS Status Toast */}
           {gpsStatus && (
             <div className="p-2 bg-sky-950/80 border border-sky-500/40 rounded-lg text-xs text-sky-300 flex items-center gap-2">
               <LocateFixed className="w-3.5 h-3.5 shrink-0" />
@@ -1085,15 +760,14 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
             </div>
           )}
 
-          {/* Quick Preset City Badges */}
+          {/* Preset Quick Cities */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
             <span className="text-[11px] font-mono text-slate-500 shrink-0 mr-1 flex items-center gap-1">
               <MapPin className="w-3 h-3 text-[#ff7700]" />
               Quick Cities:
             </span>
             {PRESET_QUICK_CITIES.map((c) => {
-              const isSelected =
-                Math.abs(selectedLocation.lat - c.lat) < 0.05 && Math.abs(selectedLocation.lon - c.lon) < 0.05;
+              const isSelected = Math.abs(locLat - c.lat) < 0.05 && Math.abs(locLon - c.lon) < 0.05;
               return (
                 <button
                   key={c.name}
@@ -1118,59 +792,74 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
             })}
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Main Content Body */}
-      <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-8">
         {/* ========================================================================= */}
-        {/* SECTION A — WEATHER IN YOUR LOCATION */}
+        {/* SECTION 2: CURRENT CONDITIONS (METEOROLOGICAL OBSERVATION)                */}
         {/* ========================================================================= */}
-        {(activeSubTab === 'DASHBOARD' || activeSubTab === 'WEATHER') && (
+        {(activeTab === 'ALL' || activeTab === 'WEATHER') && (
           <section className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
               <div>
                 <h2 className="text-lg font-black text-white flex items-center gap-2">
                   <CloudSun className="w-5 h-5 text-sky-400" />
-                  <span>Weather in Your Location</span>
+                  <span>Current Weather Conditions</span>
                   <span className="text-xs font-mono font-normal text-slate-400">
-                    ({selectedLocation.city}, {selectedLocation.region})
+                    ({locCity}, {locRegion})
                   </span>
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Real-time numerical atmosphere telemetry, humidity, wind vector, and next 7-day model projections.
+                  Real-time atmospheric observations, temperature, moisture, wind velocity, and precipitation indicators.
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-mono text-slate-400">
-                  Coordinates: {selectedLocation.lat.toFixed(4)}°N, {selectedLocation.lon.toFixed(4)}°E
+                  {locLat.toFixed(4)}°N, {locLon.toFixed(4)}°E
                 </span>
+                {weatherCachedAt && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30">
+                    Cached: {weatherCachedAt.slice(11, 16) || weatherCachedAt}
+                  </span>
+                )}
                 {isSavedAsDefault && (
                   <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold">
-                    ★ Preferred Home City
+                    ★ Preferred
                   </span>
                 )}
               </div>
             </div>
 
-            {weatherLoading && !weatherData ? (
+            {/* Weather State Handling */}
+            {weatherLoading ? (
               <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl">
                 <div className="w-8 h-8 border-2 border-sky-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
                 <p className="text-xs text-slate-400 font-mono">Fetching Open-Meteo atmospheric forecast...</p>
               </div>
             ) : weatherError ? (
-              <div className="p-6 bg-red-950/30 border border-red-800 rounded-2xl flex items-center gap-3 text-red-200 text-xs">
-                <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
-                <div>
-                  <div className="font-bold">Meteorological Service Notice</div>
-                  <div>{weatherError}</div>
+              <div className="p-6 bg-red-950/30 border border-red-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-red-200">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-6 h-6 text-red-400 shrink-0" />
+                  <div>
+                    <div className="font-bold text-sm text-red-300">Weather Service Notice</div>
+                    <div>{weatherError}</div>
+                  </div>
                 </div>
+                <button
+                  onClick={() => fetchWeather(locLat, locLon, locCity, locRegion, locCountry)}
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1.5 shadow transition"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retry Weather</span>
+                </button>
               </div>
             ) : weatherData ? (
               <div className="space-y-4">
-                {/* Current Weather Hero Card */}
+                {/* Weather Hero Card */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  {/* Big Temperature & Condition Display */}
+                  {/* Left: Big Temperature & Condition */}
                   <div className="lg:col-span-1 p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 flex flex-col justify-between shadow-xl">
                     <div className="flex justify-between items-start">
                       <div>
@@ -1178,10 +867,10 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
                           Current Observation
                         </div>
                         <h3 className="text-lg font-black text-white mt-0.5">
-                          {selectedLocation.city}
+                          {locCity}
                         </h3>
                         <div className="text-xs text-slate-400">
-                          {selectedLocation.region}, {selectedLocation.country}
+                          {locRegion}, {locCountry}
                         </div>
                       </div>
                       <div className="p-3 rounded-2xl bg-slate-800/60 border border-slate-700/60">
@@ -1210,7 +899,7 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
                     </div>
                   </div>
 
-                  {/* Detailed Meteorological Metrics Grid */}
+                  {/* Right: Key Indicators */}
                   <div className="lg:col-span-2 p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col justify-between space-y-4">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                       <span className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">
@@ -1221,19 +910,18 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
                       </span>
                     </div>
 
-                    {/* Flood Runoff Hazard Indicator */}
-                    {weatherData && (weatherData.current.rain > 10 || weatherData.current.precipitation > 15 || weatherData.daily.some(d => d.precipitationSum > 35)) && (
+                    {/* Runoff Hazard Notice */}
+                    {(weatherData.current.rain > 10 || weatherData.current.precipitation > 15) && (
                       <div className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-xl flex items-start gap-2.5 text-xs text-amber-200">
                         <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                         <div>
-                          <span className="font-bold text-amber-300 block">Heavy Precipitation / Runoff Accumulation Indicator</span>
-                          Atmospheric rainfall model projects elevated runoff rates ({Math.max(weatherData.current.rain, weatherData.current.precipitation)} mm/h).
-                          <span className="block text-[10px] text-amber-400/80 mt-0.5">Note: Numerical weather forecasts indicate atmospheric precipitation and are distinct from verified hydrological water-level gauges.</span>
+                          <span className="font-bold text-amber-300 block">Heavy Atmospheric Precipitation Warning</span>
+                          Precipitation model registers elevated rainfall rates ({Math.max(weatherData.current.rain, weatherData.current.precipitation)} mm/h).
                         </div>
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                       {/* Humidity */}
                       <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80">
                         <div className="text-[10px] text-slate-400 flex items-center gap-1 mb-1">
@@ -1244,15 +932,15 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
                           {weatherData.current.humidity}%
                         </div>
                         <div className="text-[10px] text-slate-500 mt-0.5">
-                          {weatherData.current.humidity > 80 ? 'High moisture' : 'Moderate moisture'}
+                          {weatherData.current.humidity > 80 ? 'High moisture' : 'Moderate'}
                         </div>
                       </div>
 
-                      {/* Wind Speed & Direction */}
+                      {/* Wind */}
                       <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80">
                         <div className="text-[10px] text-slate-400 flex items-center gap-1 mb-1">
                           <Wind className="w-3.5 h-3.5 text-teal-400" />
-                          <span>WIND VECTOR</span>
+                          <span>WIND SPEED</span>
                         </div>
                         <div className="text-lg font-black text-white font-mono">
                           {weatherData.current.windSpeed} <span className="text-xs font-normal text-slate-400">km/h</span>
@@ -1280,26 +968,27 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
                       <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80">
                         <div className="text-[10px] text-slate-400 flex items-center gap-1 mb-1">
                           <Thermometer className="w-3.5 h-3.5 text-rose-400" />
-                          <span>THERMAL INDEX</span>
+                          <span>FEELS LIKE</span>
                         </div>
                         <div className="text-lg font-black text-white font-mono">
                           {weatherData.current.apparentTemperature.toFixed(1)}°C
                         </div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">
-                          Delta: {(weatherData.current.apparentTemperature - weatherData.current.temperature).toFixed(1)}°C
+                        <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                          Actual: {weatherData.current.temperature.toFixed(1)}°C
                         </div>
                       </div>
                     </div>
 
-                    {/* Attribution & Integrity Footer */}
                     <div className="pt-2 border-t border-slate-800/60 flex flex-wrap items-center justify-between text-[11px] text-slate-500">
-                      <span>Data Source: <a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">Open-Meteo.com</a> (CC BY 4.0)</span>
-                      <span>Numerical Weather Prediction Model • Not a direct physical station reading</span>
+                      <span>Source: Open-Meteo Free API (CC BY 4.0)</span>
+                      <span>Numerical Model • Free & Localized</span>
                     </div>
                   </div>
                 </div>
 
-                {/* 24-Hour Hourly Forecast Horizontal Scroller */}
+                {/* ========================================================================= */}
+                {/* SECTION 3: HOURLY FORECAST (24-HOUR TIMELINE)                             */}
+                {/* ========================================================================= */}
                 <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
@@ -1335,15 +1024,17 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
                   </div>
                 </div>
 
-                {/* 7-Day Extended Forecast Grid */}
+                {/* ========================================================================= */}
+                {/* SECTION 4: SEVEN-DAY METEOROLOGICAL FORECAST                             */}
+                {/* ========================================================================= */}
                 <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                     <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
                       <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                      7-Day Meteorological Outlook
+                      7-Day Extended Meteorological Outlook
                     </span>
                     <span className="text-[11px] text-slate-500 font-mono">
-                      Min/Max Daily Boundaries & Precipitation
+                      Min/Max Daily Boundaries & Precipitation Sum
                     </span>
                   </div>
 
@@ -1395,614 +1086,180 @@ export const WeatherNewsHub: React.FC<WeatherNewsHubProps> = ({ userLocation, sh
         )}
 
         {/* ========================================================================= */}
-        {/* SECTION B — WEATHER NEWS NEAR YOU */}
+        {/* SECTIONS 5, 6, & 7: FLOOD, CHENNAI/TN, & DISASTER MANAGEMENT NEWS        */}
         {/* ========================================================================= */}
-        {(activeSubTab === 'DASHBOARD' || activeSubTab === 'LOCAL_NEWS') && (
-          <section className="space-y-4">
+        {(activeTab === 'ALL' || activeTab === 'NEWS') && (
+          <section className="space-y-5 pt-2">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
               <div>
                 <h2 className="text-lg font-black text-white flex items-center gap-2">
                   <Newspaper className="w-5 h-5 text-amber-400" />
-                  <span>Weather News Near You</span>
-                  <span className="text-xs font-mono font-normal text-slate-400">
-                    ({selectedLocation.city} / {selectedLocation.region})
-                  </span>
+                  <span>Flood, Monsoon & Emergency News Wire</span>
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Official meteorological department bulletins (IMD), monsoon forecasts, rainfall alerts & regional reports.
+                  Live public RSS feeds covering Chennai floods, Tamil Nadu monsoon updates, and National Disaster Management.
                 </p>
               </div>
 
-              {/* Local News Search Input */}
+              {/* Keyword Filter */}
               <div className="relative w-full sm:w-64">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
                 <input
                   type="text"
-                  value={localNewsSearch}
-                  onChange={(e) => setLocalNewsSearch(e.target.value)}
-                  placeholder="Filter local articles..."
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                  value={newsSearch}
+                  onChange={(e) => setNewsSearch(e.target.value)}
+                  placeholder="Filter news articles..."
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
                 />
               </div>
             </div>
 
-            {/* Category Filter Pills for Local News */}
-            <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <span className="text-[11px] font-mono text-slate-500 mr-1 flex items-center gap-1">
-                <Filter className="w-3 h-3 text-amber-400" />
-                TOPIC:
-              </span>
-              {[
-                { id: 'ALL', label: 'All Updates' },
-                { id: 'CYCLONES_HURRICANES', label: 'Cyclones & Depressions' },
-                { id: 'EXTREME_RAIN_FLOOD', label: 'Rainfall & Monsoon' },
-                { id: 'SEVERE_STORMS', label: 'Thunderstorms & Hail' },
-                { id: 'HEATWAVE_DROUGHT', label: 'Heatwave & Temperature' },
-                { id: 'METEOROLOGY_GENERAL', label: 'IMD Bulletins' },
-              ].map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setLocalCategoryFilter(cat.id as WeatherNewsCategory)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
-                    localCategoryFilter === cat.id
-                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
-                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-200'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Local News Article Cards */}
-            {localNewsLoading && localNews.length === 0 ? (
-              <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl">
-                <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                <p className="text-xs text-slate-400 font-mono">Retrieving regional meteorological RSS bulletins...</p>
-              </div>
-            ) : localNewsError && localNews.length === 0 ? (
-              <div className="p-4 bg-amber-950/30 border border-amber-800/80 rounded-xl text-xs text-amber-200 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>{localNewsError}</span>
-              </div>
-            ) : filteredLocalNews.length === 0 ? (
-              <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-xs text-slate-400 space-y-3">
-                <Newspaper className="w-8 h-8 text-slate-600 mx-auto" />
-                <p className="text-slate-200 font-bold text-sm">
-                  No active severe weather or flood bulletins found for {selectedLocation.city} ({selectedLocation.country}).
-                </p>
-                <p className="text-slate-400 max-w-md mx-auto text-xs">
-                  Public RSS feeds for this specific locality currently report no emergency flood warnings. You can broaden search or inspect global disaster bulletins.
-                </p>
-                <div className="flex items-center justify-center gap-2 pt-1">
-                  <button
-                    onClick={() => {
-                      setLocalCategoryFilter('ALL');
-                      setLocalNewsSearch('');
-                      fetchLocalNews(selectedLocation.region || selectedLocation.country, '', selectedLocation.country);
-                    }}
-                    className="px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-lg text-xs transition"
-                  >
-                    Search Broader {selectedLocation.country} News
-                  </button>
-                  <button
-                    onClick={() => setActiveSubTab('GLOBAL_NEWS')}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition"
-                  >
-                    Check Global Disaster Alerts
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredLocalNews.slice(0, localVisibleCount).map((article) => (
-                  <div
-                    key={article.id}
-                    className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 flex flex-col justify-between shadow-lg transition space-y-3"
-                  >
-                    <div className="space-y-2">
-                      {/* Badges: Publisher & Category */}
-                      <div className="flex flex-wrap items-center justify-between gap-1.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-bold text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-slate-950 text-slate-300 border border-slate-800">
-                            {article.publisher}
-                          </span>
-
-                          {article.isOfficialBulletin && (
-                            <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                              <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                              Official IMD
-                            </span>
-                          )}
-                        </div>
-
-                        <span
-                          className={`text-[10px] font-mono px-2 py-0.5 rounded border ${getCategoryBadge(
-                            article.category
-                          )}`}
-                        >
-                          {article.category.replace('_', ' ')}
-                        </span>
-                      </div>
-
-                      {/* Headline */}
-                      <h3 className="font-bold text-sm text-slate-100 leading-snug hover:text-amber-400 transition">
-                        {article.headline}
-                      </h3>
-
-                      {/* Snippet */}
-                      {article.snippet && (
-                        <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
-                          {article.snippet}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Footer: Date, Time & Source Link */}
-                    <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-slate-500" />
-                        <span>{article.publishedDate}</span>
-                        {article.publishedTime && (
-                          <span className="text-slate-500">
-                            • {article.publishedTime} {article.timezoneLabel}
-                          </span>
-                        )}
-                      </div>
-
-                      <a
-                        href={article.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 flex items-center gap-1 font-sans text-xs font-semibold transition"
-                      >
-                        <span>Read Original</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Load More Button for Local News */}
-            {filteredLocalNews.length > localVisibleCount && (
-              <div className="text-center pt-2">
-                <button
-                  onClick={() => setLocalVisibleCount((prev) => prev + 6)}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-amber-400 border border-slate-800 hover:border-amber-500/40 transition"
-                >
-                  Load More Local Articles ({filteredLocalNews.length - localVisibleCount} remaining)
-                </button>
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* ========================================================================= */}
-        {/* SECTION C — GLOBAL WEATHER NEWS */}
-        {/* ========================================================================= */}
-        {(activeSubTab === 'DASHBOARD' || activeSubTab === 'GLOBAL_NEWS') && (
-          <section className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-              <div>
-                <h2 className="text-lg font-black text-white flex items-center gap-2">
-                  <Globe className="w-5 h-5 text-blue-400" />
-                  <span>Global Weather News</span>
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Tropical cyclones, hurricanes, severe meteorological developments & extreme weather bulletins worldwide.
-                </p>
-              </div>
-
-              {/* Global News Search Input */}
-              <div className="relative w-full sm:w-64">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                <input
-                  type="text"
-                  value={globalNewsSearch}
-                  onChange={(e) => setGlobalNewsSearch(e.target.value)}
-                  placeholder="Filter global articles..."
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            {/* Region & Category Filter Controls */}
+            {/* News Categories Filter Pills */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-              {/* Region Pills */}
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
                 <span className="text-[11px] font-mono text-slate-500 mr-1 flex items-center gap-1">
-                  <Globe className="w-3 h-3 text-blue-400" />
-                  REGION:
+                  <Filter className="w-3 h-3 text-amber-400" />
+                  CATEGORY:
                 </span>
                 {[
-                  { id: 'ALL', label: 'All Regions' },
-                  { id: 'ASIA_PACIFIC', label: 'Asia-Pacific' },
-                  { id: 'AMERICAS', label: 'Americas' },
-                  { id: 'EUROPE', label: 'Europe' },
-                  { id: 'AFRICA_MIDDLE_EAST', label: 'Africa & M.E.' },
-                  { id: 'GLOBAL', label: 'International' },
-                ].map((reg) => (
+                  { id: 'all', label: 'All Flood & Weather News' },
+                  { id: 'chennai', label: 'Chennai Floods & Basin' },
+                  { id: 'tamilnadu', label: 'Tamil Nadu Rainfall' },
+                  { id: 'flood_alerts', label: 'India Flood Warnings' },
+                  { id: 'disaster_mgmt', label: 'Disaster Management' },
+                ].map((cat) => (
                   <button
-                    key={reg.id}
-                    onClick={() => setGlobalRegionFilter(reg.id as WeatherNewsRegion)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
-                      globalRegionFilter === reg.id
-                        ? 'bg-blue-600 text-white border-blue-400 font-bold'
+                    key={cat.id}
+                    onClick={() => {
+                      setNewsCategory(cat.id as any);
+                      fetchNews(cat.id);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                      newsCategory === cat.id
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow'
                         : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-200'
                     }`}
                   >
-                    {reg.label}
+                    {cat.label}
                   </button>
                 ))}
               </div>
 
-              {/* Category Dropdown/Pills */}
-              <div className="flex items-center gap-1.5 text-xs">
-                <span className="text-[11px] font-mono text-slate-500">CATEGORY:</span>
-                <select
-                  value={globalCategoryFilter}
-                  onChange={(e) => setGlobalCategoryFilter(e.target.value as WeatherNewsCategory)}
-                  className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-sans"
-                >
-                  <option value="ALL">All Severe Weather</option>
-                  <option value="CYCLONES_HURRICANES">Cyclones & Hurricanes</option>
-                  <option value="EXTREME_RAIN_FLOOD">Floods & Extreme Rain</option>
-                  <option value="HEATWAVE_DROUGHT">Heatwave & Drought</option>
-                  <option value="SEVERE_STORMS">Severe Storms</option>
-                  <option value="METEOROLOGY_GENERAL">General Meteorology</option>
-                </select>
-              </div>
+              {newsCachedAt && (
+                <span className="text-[10px] font-mono text-slate-500">
+                  RSS Cached: {newsCachedAt.slice(11, 16) || newsCachedAt}
+                </span>
+              )}
             </div>
 
-            {/* Global News Cards Grid */}
-            {globalNewsLoading && globalNews.length === 0 ? (
-              <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl">
-                <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                <p className="text-xs text-slate-400 font-mono">Aggregating international meteorological feeds (GDACS, BBC, Global Wire)...</p>
+            {/* News State Handling */}
+            {newsLoading ? (
+              <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl">
+                <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                <p className="text-xs text-slate-400 font-mono">Retrieving live public RSS meteorological news...</p>
               </div>
-            ) : globalNewsError && globalNews.length === 0 ? (
-              <div className="p-4 bg-blue-950/30 border border-blue-800/80 rounded-xl text-xs text-blue-200 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-blue-400 shrink-0" />
-                <span>{globalNewsError}</span>
+            ) : newsError && newsArticles.length === 0 ? (
+              <div className="p-6 bg-amber-950/20 border border-amber-800/60 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-amber-200">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-6 h-6 text-amber-400 shrink-0" />
+                  <div>
+                    <div className="font-bold text-sm text-amber-300">News Service Status</div>
+                    <div>{newsError}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => fetchNews(newsCategory)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 font-bold text-xs flex items-center gap-1.5 shadow transition"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retry News</span>
+                </button>
               </div>
-            ) : filteredGlobalNews.length === 0 ? (
-              <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-xs text-slate-400">
-                No international weather news matched your filter selections.
+            ) : filteredArticles.length === 0 ? (
+              <div className="p-10 text-center bg-slate-900 border border-slate-800 rounded-2xl text-xs text-slate-400 space-y-3">
+                <Newspaper className="w-10 h-10 text-slate-600 mx-auto" />
+                <p className="text-slate-200 font-bold text-sm">
+                  Currently, no news articles are available. Please try again later.
+                </p>
+                <button
+                  onClick={() => {
+                    setNewsSearch('');
+                    setNewsCategory('all');
+                    fetchNews('all');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 text-xs font-semibold transition"
+                >
+                  Reset News Filters
+                </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {filteredGlobalNews.slice(0, globalVisibleCount).map((article) => (
-                  <div
-                    key={article.id}
-                    className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 flex flex-col justify-between shadow-lg transition space-y-3"
-                  >
-                    <div className="space-y-2">
-                      {/* Region & Publisher Header */}
-                      <div className="flex items-center justify-between text-[10px] font-mono">
-                        <span className="font-bold uppercase text-slate-400 truncate max-w-[120px]">
-                          {article.publisher}
-                        </span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
-                          {article.locationOrRegion}
-                        </span>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredArticles.slice(0, visibleCount).map((art) => (
+                    <article
+                      key={art.id}
+                      className="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 flex flex-col justify-between shadow-lg transition space-y-3 group hover:bg-slate-900/90"
+                    >
+                      <div className="space-y-2">
+                        {/* Publisher & Category Badge */}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-slate-950 text-slate-300 border border-slate-800">
+                            {art.publisher}
+                          </span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                            {art.category.replace('_', ' ')}
+                          </span>
+                        </div>
+
+                        {/* Headline */}
+                        <h3 className="font-bold text-sm text-slate-100 group-hover:text-amber-400 transition leading-snug">
+                          {art.headline}
+                        </h3>
+
+                        {/* Summary */}
+                        {art.snippet && (
+                          <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                            {art.snippet}
+                          </p>
+                        )}
                       </div>
 
-                      {/* Headline */}
-                      <h3 className="font-bold text-sm text-slate-100 leading-snug hover:text-blue-400 transition">
-                        {article.headline}
-                      </h3>
+                      {/* Footer: Date & Link */}
+                      <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>{art.publishedDate}</span>
+                        </div>
 
-                      {/* Snippet */}
-                      {article.snippet && (
-                        <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
-                          {article.snippet}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2 pt-2 border-t border-slate-800/80">
-                      <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
-                        <span>{article.publishedDate}</span>
-                        {article.publishedTime && <span>{article.publishedTime} UTC</span>}
+                        <a
+                          href={art.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 flex items-center gap-1 font-sans text-xs font-semibold transition"
+                        >
+                          <span>Read Source</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
                       </div>
+                    </article>
+                  ))}
+                </div>
 
-                      <a
-                        href={article.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full py-1.5 px-2 rounded-lg bg-blue-600/10 hover:bg-blue-600/25 text-blue-300 border border-blue-500/30 flex items-center justify-center gap-1.5 text-xs font-semibold transition"
-                      >
-                        <span>Read Source Report</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
+                {filteredArticles.length > visibleCount && (
+                  <div className="text-center pt-2">
+                    <button
+                      onClick={() => setVisibleCount((prev) => prev + 9)}
+                      className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-amber-400 border border-slate-800 hover:border-amber-500/40 transition"
+                    >
+                      Load More Articles ({filteredArticles.length - visibleCount} remaining)
+                    </button>
                   </div>
-                ))}
-              </div>
-            )}
-
-            {/* Load More Button for Global News */}
-            {filteredGlobalNews.length > globalVisibleCount && (
-              <div className="text-center pt-2">
-                <button
-                  onClick={() => setGlobalVisibleCount((prev) => prev + 8)}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-blue-400 border border-slate-800 hover:border-blue-500/40 transition"
-                >
-                  Load More International Reports ({filteredGlobalNews.length - globalVisibleCount} remaining)
-                </button>
+                )}
               </div>
             )}
           </section>
         )}
-
-        {/* =================================================================== */}
-        {/* TAB 5: HYDROLOGICAL PREDICTION & SQLITE HISTORY                     */}
-        {/* =================================================================== */}
-        {activeSubTab === 'HYDRO_PREDICTION' && (
-          <section className="space-y-6">
-            <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold text-rose-400 uppercase tracking-wider px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/30">
-                      FastAPI & SQLite Hydrological Engine
-                    </span>
-                    <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
-                      100% Free & Open-Source
-                    </span>
-                  </div>
-                  <h2 className="text-lg font-bold text-white mt-1">Hydrological Runoff, Depth & Inundation Prediction</h2>
-                  <p className="text-xs text-slate-400">
-                    Calculates surface runoff, 6-hour predicted water depth, rate-of-rise, and ETA to critical danger thresholds using local catchment variables.
-                  </p>
-                </div>
-
-                <button
-                  onClick={handleRunPrediction}
-                  disabled={predCalculating}
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition disabled:opacity-50"
-                >
-                  <Activity className="w-4 h-4" />
-                  <span>{predCalculating ? 'Computing Physics Model...' : 'Calculate & Save to SQLite'}</span>
-                </button>
-              </div>
-
-              {/* Form Input Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1">
-                  <label className="text-[10px] font-mono text-slate-400 uppercase block">Precipitation (mm/h)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={predPrecip}
-                    onChange={(e) => setPredPrecip(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-rose-400 focus:outline-none"
-                  />
-                  <span className="text-[9px] text-slate-500 block">Rainfall intensity rate</span>
-                </div>
-
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1">
-                  <label className="text-[10px] font-mono text-slate-400 uppercase block">Soil Saturation (%)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={predSat}
-                    onChange={(e) => setPredSat(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-rose-400 focus:outline-none"
-                  />
-                  <span className="text-[9px] text-slate-500 block">Ground moisture level</span>
-                </div>
-
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1">
-                  <label className="text-[10px] font-mono text-slate-400 uppercase block">Catchment Inflow (cusecs)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="500"
-                    value={predInflow}
-                    onChange={(e) => setPredInflow(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-rose-400 focus:outline-none"
-                  />
-                  <span className="text-[9px] text-slate-500 block">Dam / river tributary inflow</span>
-                </div>
-
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1">
-                  <label className="text-[10px] font-mono text-slate-400 uppercase block">Elevation (m MSL)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={predElevation}
-                    onChange={(e) => setPredElevation(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-rose-400 focus:outline-none"
-                  />
-                  <span className="text-[9px] text-slate-500 block">Terrain height above sea level</span>
-                </div>
-
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1">
-                  <label className="text-[10px] font-mono text-slate-400 uppercase block">Current Depth (cm)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={predCurrentDepth}
-                    onChange={(e) => setPredCurrentDepth(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-rose-400 focus:outline-none"
-                  />
-                  <span className="text-[9px] text-slate-500 block">Observed road-surface water</span>
-                </div>
-
-                <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1">
-                  <label className="text-[10px] font-mono text-slate-400 uppercase block">Catchment Sector</label>
-                  <input
-                    type="text"
-                    value={predLocationName}
-                    onChange={(e) => setPredLocationName(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-rose-400 focus:outline-none"
-                  />
-                  <span className="text-[9px] text-slate-500 block">Basin or neighborhood name</span>
-                </div>
-              </div>
-
-              {/* Real-time Calculation Result Card */}
-              {predResult && (
-                <div className={`p-4 rounded-xl border ${
-                  predResult.risk_level === 'CRITICAL'
-                    ? 'bg-rose-950/40 border-rose-500/60 text-rose-200'
-                    : predResult.risk_level === 'WARNING'
-                    ? 'bg-amber-950/40 border-amber-500/60 text-amber-200'
-                    : predResult.risk_level === 'CAUTION'
-                    ? 'bg-sky-950/40 border-sky-500/60 text-sky-200'
-                    : 'bg-emerald-950/40 border-emerald-500/60 text-emerald-200'
-                } space-y-3`}>
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-black uppercase tracking-wider ${
-                        predResult.risk_level === 'CRITICAL'
-                          ? 'bg-rose-500 text-white'
-                          : predResult.risk_level === 'WARNING'
-                          ? 'bg-amber-500 text-slate-950'
-                          : predResult.risk_level === 'CAUTION'
-                          ? 'bg-sky-500 text-slate-950'
-                          : 'bg-emerald-500 text-slate-950'
-                      }`}>
-                        RISK LEVEL: {predResult.risk_level}
-                      </span>
-                      <span className="text-xs font-mono text-slate-300">
-                        {predResult.location_name} • ID: {predResult.id}
-                      </span>
-                    </div>
-
-                    <div className="text-xs font-mono text-slate-400">
-                      Calculated at {new Date(predResult.timestamp).toLocaleTimeString()}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-                    <div className="bg-slate-950/60 p-2.5 rounded-lg border border-white/10">
-                      <span className="text-[10px] font-mono text-slate-400 block">RUNOFF COEFFICIENT (R)</span>
-                      <span className="text-base font-black font-mono text-white">{predResult.runoff_coefficient}</span>
-                    </div>
-                    <div className="bg-slate-950/60 p-2.5 rounded-lg border border-white/10">
-                      <span className="text-[10px] font-mono text-slate-400 block">PREDICTED DEPTH (6H)</span>
-                      <span className="text-base font-black font-mono text-white">{predResult.predicted_depth_6h_cm} cm</span>
-                    </div>
-                    <div className="bg-slate-950/60 p-2.5 rounded-lg border border-white/10">
-                      <span className="text-[10px] font-mono text-slate-400 block">RATE OF RISE</span>
-                      <span className="text-base font-black font-mono text-white">{predResult.rate_of_rise_cm_min} cm/min</span>
-                    </div>
-                    <div className="bg-slate-950/60 p-2.5 rounded-lg border border-white/10">
-                      <span className="text-[10px] font-mono text-slate-400 block">INUNDATION ETA (50cm)</span>
-                      <span className="text-base font-black font-mono text-white">
-                        {predResult.inundation_eta_minutes !== null ? `${predResult.inundation_eta_minutes} mins` : 'Safe / Non-Critical'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-black/40 border border-white/10">
-                    <span className="text-[10px] font-mono text-slate-400 uppercase block mb-0.5">Recommended Evacuation Action</span>
-                    <p className="text-xs font-bold leading-relaxed">{predResult.recommended_action}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* SQLite Persistent Prediction Records Table */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-bold text-white text-base">Persistent SQLite Prediction History</h3>
-                  <p className="text-xs text-slate-400">
-                    Real-time records saved in the local SQLite `flood_predictions` table. Never transmitted to third-party paid servers.
-                  </p>
-                </div>
-                <button
-                  onClick={fetchPredictionHistory}
-                  disabled={predHistoryLoading}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 flex items-center gap-1.5 transition"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${predHistoryLoading ? 'animate-spin' : ''}`} />
-                  <span>Refresh SQLite Records</span>
-                </button>
-              </div>
-
-              {predHistory.length === 0 ? (
-                <div className="p-8 text-center text-slate-500 font-mono text-xs bg-slate-950/40 rounded-xl border border-slate-800">
-                  No prediction records stored in SQLite yet. Adjust inputs above and click "Calculate & Save to SQLite".
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-[10px] font-mono uppercase text-slate-400">
-                        <th className="py-2.5 px-3">Timestamp</th>
-                        <th className="py-2.5 px-3">Location</th>
-                        <th className="py-2.5 px-3">Precipitation</th>
-                        <th className="py-2.5 px-3">Runoff (R)</th>
-                        <th className="py-2.5 px-3">Predicted 6h</th>
-                        <th className="py-2.5 px-3">ETA (50cm)</th>
-                        <th className="py-2.5 px-3">Risk Level</th>
-                        <th className="py-2.5 px-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60 font-mono">
-                      {predHistory.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-800/40 transition">
-                          <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap">
-                            {new Date(item.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </td>
-                          <td className="py-2.5 px-3 font-semibold text-white whitespace-nowrap">
-                            {item.location_name || 'Catchment Basin'}
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-300">
-                            {item.precipitation_mm_h} mm/h
-                          </td>
-                          <td className="py-2.5 px-3 text-sky-400">
-                            {item.runoff_coefficient}
-                          </td>
-                          <td className="py-2.5 px-3 font-bold text-white">
-                            {item.predicted_depth_6h_cm} cm
-                          </td>
-                          <td className="py-2.5 px-3 text-amber-300">
-                            {item.inundation_eta_minutes !== null ? `${item.inundation_eta_minutes}m` : 'Safe'}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              item.risk_level === 'CRITICAL'
-                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                                : item.risk_level === 'WARNING'
-                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                                : item.risk_level === 'CAUTION'
-                                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                            }`}>
-                              {item.risk_level}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-right">
-                            <button
-                              onClick={() => handleDeletePrediction(item.id)}
-                              className="p-1.5 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition"
-                              title="Delete record from SQLite"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-      </div>
+      </main>
     </div>
   );
 };

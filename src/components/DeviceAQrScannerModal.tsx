@@ -188,9 +188,20 @@ export const DeviceAQrScannerModal: React.FC<DeviceAQrScannerModalProps> = ({
         }),
       });
 
-      const data = await res.json();
+      let data: any = {};
+      try {
+        const text = await res.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { error: text?.slice(0, 140) };
+        }
+      } catch {
+        data = {};
+      }
+
       if (!res.ok) {
-        throw new Error(data.error || `HTTP ${res.status}`);
+        throw new Error(data.error && !data.error.includes('<') ? data.error : `HTTP ${res.status}: Failed to submit pairing token.`);
       }
 
       setTargetDeviceInfo(data.targetDeviceInfo || {});
@@ -218,9 +229,20 @@ export const DeviceAQrScannerModal: React.FC<DeviceAQrScannerModalProps> = ({
         }),
       });
 
-      const data = await res.json();
+      let data: any = {};
+      try {
+        const text = await res.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { error: text?.slice(0, 140) };
+        }
+      } catch {
+        data = {};
+      }
+
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to approve pairing');
+        throw new Error(data.error && !data.error.includes('<') ? data.error : `HTTP ${res.status}: Failed to approve pairing.`);
       }
 
       setCameraState('APPROVED');

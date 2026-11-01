@@ -1,27 +1,28 @@
-"""
-FloodGuard 2.1 — Weather & News Aggregator Service (Free, Public APIs & RSS)
-"""
-
 import time
 import re
 import urllib.parse
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 import httpx
 
-# In-memory caches with TTL
-weather_cache: Dict[str, Dict[str, Any]] = {}
-geocoding_cache: Dict[str, Dict[str, Any]] = {}
-local_news_cache: Dict[str, Dict[str, Any]] = {}
-global_news_cache: Optional[Dict[str, Any]] = None
+from backend.database import (
+    get_cached_weather,
+    set_cached_weather,
+    get_cached_news,
+    set_cached_news,
+)
 
 WEATHER_CACHE_TTL_SEC = 300      # 5 minutes
 GEOCODING_CACHE_TTL_SEC = 86400  # 24 hours
-NEWS_CACHE_TTL_SEC = 900        # 15 minutes
+NEWS_CACHE_TTL_SEC = 900         # 15 minutes
+
+geocoding_cache: Dict[str, Dict[str, Any]] = {}
 
 def get_wmo_weather_info(code: int) -> Dict[str, str]:
     mapping = {
         0: ("Clear Sky", "Sun"),
-        1: ("Mainly Clear", "Sun"),
+        1: ("Mainly Clear", "SunDim"),
         2: ("Partly Cloudy", "CloudSun"),
         3: ("Overcast", "Cloud"),
         45: ("Foggy", "CloudFog"),
@@ -29,22 +30,34 @@ def get_wmo_weather_info(code: int) -> Dict[str, str]:
         51: ("Light Drizzle", "CloudDrizzle"),
         53: ("Moderate Drizzle", "CloudDrizzle"),
         55: ("Dense Drizzle", "CloudDrizzle"),
+        56: ("Freezing Drizzle", "CloudSnow"),
+        57: ("Dense Freezing Drizzle", "CloudSnow"),
         61: ("Slight Rain", "CloudRain"),
         63: ("Moderate Rain", "CloudRain"),
         65: ("Heavy Rain", "CloudRain"),
+        66: ("Freezing Rain", "CloudSnow"),
+        67: ("Heavy Freezing Rain", "CloudSnow"),
+        71: ("Slight Snowfall", "CloudSnow"),
+        73: ("Moderate Snowfall", "CloudSnow"),
+        75: ("Heavy Snowfall", "CloudSnow"),
+        77: ("Snow Grains", "CloudSnow"),
         80: ("Rain Showers", "CloudRain"),
         81: ("Moderate Showers", "CloudRain"),
         82: ("Violent Showers", "CloudRain"),
+        85: ("Snow Showers", "CloudSnow"),
+        86: ("Heavy Snow Showers", "CloudSnow"),
         95: ("Thunderstorm", "CloudLightning"),
         96: ("Thunderstorm with Slight Hail", "CloudLightning"),
         99: ("Thunderstorm with Heavy Hail", "CloudLightning"),
     }
-    cond, icon = mapping.get(code, ("Variable Conditions", "Cloud"))
+    cond, icon = mapping.get(code, ("Variable Conditions", "CloudSun"))
     return {"condition": cond, "icon": icon}
 
 def get_wind_cardinal(deg: float) -> str:
+    if deg is None:
+        return "VAR"
     dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
-    idx = int(((deg + 11.25) % 360) / 22.5)
+    idx = int(((deg + 11.25) % 360) / 22.5) % 16
     return dirs[idx]
 
 def clean_html_text(raw: str) -> str:
@@ -54,19 +67,19 @@ def clean_html_text(raw: str) -> str:
     text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"').replace('&#39;', "'").replace('&nbsp;', ' ')
     return re.sub(r'\s+', ' ', text).strip()
 
-def categorize_weather_headline(title: str, snippet: str = "") -> str:
+def categorize_news_headline(title: str, snippet: str = "") -> str:
     t = f"{title} {snippet}".lower()
     if re.search(r'\b(cyclone|hurricane|typhoon|super typhoon|storm surge|landfall)\b', t):
         return "CYCLONES_HURRICANES"
-    if re.search(r'\b(flood|inundat|overflow|waterlogged|deluge|flash flood|submerged)\b', t):
+    if re.search(r'\b(flood|inundat|overflow|waterlogged|deluge|flash flood|submerged|chembarambakkam|poondi|cooum|adyar)\b', t):
         return "EXTREME_RAIN_FLOOD"
     if re.search(r'\b(heatwave|drought|wildfire|record high|extreme heat|scorching)\b', t):
         return "HEATWAVE_DROUGHT"
     if re.search(r'\b(monsoon|downpour|heavy rain|cloudburst|precipitation)\b', t):
         return "MONSOON_UPDATES"
-    if re.search(r'\b(warning|alert|red alert|orange alert|evacuat|bulletin|advisory)\b', t):
+    if re.search(r'\b(warning|alert|red alert|orange alert|evacuat|bulletin|advisory|ndrf|sdrf|tnsdma)\b', t):
         return "DISASTER_ALERTS"
-    return "GLOBAL_CLIMATE"
+    return "METEOROLOGY_GENERAL"
 
 def detect_region(text: str) -> str:
     t = text.lower()
@@ -85,13 +98,28 @@ def detect_region(text: str) -> str:
     return "GLOBAL"
 
 
-async def fetch_open_meteo_weather(lat: float, lon: float, city: str = "Unknown", region: str = "", country: str = "Unknown") -> Dict[str, Any]:
+# ==============================================================================
+# WEATHER DATA ACCESS (Open-Meteo with SQLite Caching)
+# ==============================================================================
+
+async def fetch_open_meteo_weather(
+    lat: float,
+    lon: float,
+    city: str = "Unknown",
+    region: str = "",
+    country: str = "Unknown"
+) -> Dict[str, Any]:
+    """
+    Fetches real-time atmospheric observations and 7-day forecast from Open-Meteo.
+    Caches successful results into SQLite weather_cache table with 5-minute TTL.
+    On network or API failure, returns last valid cached entry from SQLite.
+    """
     cache_key = f"{lat:.3f},{lon:.3f}"
-    now = time.time()
-    if cache_key in weather_cache:
-        cached = weather_cache[cache_key]
-        if now - cached["timestamp"] < WEATHER_CACHE_TTL_SEC:
-            return {**cached["data"], "isCached": True}
+    
+    # 1. Check SQLite Cache
+    cached = get_cached_weather(cache_key)
+    if cached and not cached.get("isExpired"):
+        return {**cached, "isCached": True}
 
     url = (
         f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
@@ -103,77 +131,100 @@ async def fetch_open_meteo_weather(lat: float, lon: float, city: str = "Unknown"
 
     try:
         async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "FloodGuard/2.1"})
-            if resp.status_code != 200:
-                if cache_key in weather_cache:
-                    return {**weather_cache[cache_key]["data"], "isCached": True, "isStale": True}
-                raise RuntimeError("Failed to fetch meteorological data from Open-Meteo")
-
-            data = resp.json()
+            resp = await client.get(url, headers={"User-Agent": "FloodGuard/2.1 (Free Hydrological Open Source)"})
+            if resp.status_code == 200:
+                raw = resp.json()
+                parsed = _parse_open_meteo_response(raw, lat, lon, city, region, country)
+                
+                # Persist to SQLite
+                set_cached_weather(cache_key, parsed, ttl_sec=WEATHER_CACHE_TTL_SEC)
+                return {**parsed, "isCached": False}
     except Exception as e:
-        if cache_key in weather_cache:
-            return {**weather_cache[cache_key]["data"], "isCached": True, "isStale": True}
-        raise
+        print(f"Notice: Open-Meteo fetch error for ({lat}, {lon}):", e)
 
-    curr = data.get("current", {})
-    hourly = data.get("hourly", {})
-    daily = data.get("daily", {})
+    # 2. Resilient fallback to expired SQLite cache if external call fails
+    if cached:
+        return {**cached, "isCached": True, "cachedFallback": True}
 
-    current_code = curr.get("weather_code", 0)
-    current_info = get_wmo_weather_info(current_code)
-    current_wind_dir = curr.get("wind_direction_10m", 0)
+    return {
+        "success": False,
+        "error": "Weather data is temporarily unavailable. Check your connection or retry.",
+        "location": {"lat": lat, "lon": lon, "city": city, "region": region, "country": country},
+        "lastUpdated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
 
-    # 24-hr hourly
-    hourly_times = hourly.get("time", [])
-    current_time_str = curr.get("time", "")
+
+def _parse_open_meteo_response(
+    raw: Dict[str, Any],
+    lat: float,
+    lon: float,
+    city: str,
+    region: str,
+    country: str
+) -> Dict[str, Any]:
+    curr = raw.get("current", {})
+    code = curr.get("weather_code", 0)
+    w_info = get_wmo_weather_info(code)
+    wind_dir = curr.get("wind_direction_10m", 0)
+
+    # 24-hour hourly
+    hourly_times = raw.get("hourly", {}).get("time", [])
+    current_iso = curr.get("time", "")
     start_idx = 0
     for idx, t in enumerate(hourly_times):
-        if t >= current_time_str:
+        if t >= current_iso:
             start_idx = idx
             break
 
     hourly_list = []
+    h_data = raw.get("hourly", {})
     for i in range(start_idx, min(start_idx + 24, len(hourly_times))):
-        code = hourly.get("weather_code", [])[i] if i < len(hourly.get("weather_code", [])) else 0
-        info = get_wmo_weather_info(code)
+        h_code = h_data.get("weather_code", [])[i] if i < len(h_data.get("weather_code", [])) else 0
+        h_info = get_wmo_weather_info(h_code)
         raw_t = hourly_times[i]
         hourly_list.append({
             "time": raw_t,
             "hourLabel": raw_t[11:16] if len(raw_t) >= 16 else raw_t,
-            "temperature": round(hourly.get("temperature_2m", [])[i] if i < len(hourly.get("temperature_2m", [])) else 0),
-            "humidity": round(hourly.get("relative_humidity_2m", [])[i] if i < len(hourly.get("relative_humidity_2m", [])) else 0),
-            "precipitationProbability": round(hourly.get("precipitation_probability", [])[i] if i < len(hourly.get("precipitation_probability", [])) else 0),
-            "precipitation": float(hourly.get("precipitation", [])[i] if i < len(hourly.get("precipitation", [])) else 0),
-            "weatherCode": code,
-            "weatherCondition": info["condition"],
-            "iconName": info["icon"],
-            "windSpeed": float(hourly.get("wind_speed_10m", [])[i] if i < len(hourly.get("wind_speed_10m", [])) else 0),
+            "temperature": round(h_data.get("temperature_2m", [])[i], 1) if i < len(h_data.get("temperature_2m", [])) else 0.0,
+            "humidity": round(h_data.get("relative_humidity_2m", [])[i]) if i < len(h_data.get("relative_humidity_2m", [])) else 0,
+            "precipitationProbability": round(h_data.get("precipitation_probability", [])[i]) if i < len(h_data.get("precipitation_probability", [])) else 0,
+            "precipitation": round(h_data.get("precipitation", [])[i], 1) if i < len(h_data.get("precipitation", [])) else 0.0,
+            "weatherCode": h_code,
+            "weatherCondition": h_info["condition"],
+            "iconName": h_info["icon"],
+            "windSpeed": round(h_data.get("wind_speed_10m", [])[i], 1) if i < len(h_data.get("wind_speed_10m", [])) else 0.0,
         })
 
     # 7-day daily
-    daily_times = daily.get("time", [])
+    d_data = raw.get("daily", {})
+    daily_times = d_data.get("time", [])
     daily_list = []
     for i in range(len(daily_times)):
-        date_str = daily_times[i]
-        code = daily.get("weather_code", [])[i] if i < len(daily.get("weather_code", [])) else 0
-        info = get_wmo_weather_info(code)
-        day_label = "Today" if i == 0 else "Tomorrow" if i == 1 else date_str
+        d_code = d_data.get("weather_code", [])[i] if i < len(d_data.get("weather_code", [])) else 0
+        d_info = get_wmo_weather_info(d_code)
+        d_date = daily_times[i]
+        try:
+            dt = datetime.strptime(d_date, "%Y-%m-%d")
+            label = "Today" if i == 0 else dt.strftime("%a, %b %d")
+        except Exception:
+            label = d_date
+
         daily_list.append({
-            "date": date_str,
-            "dayLabel": day_label,
-            "weatherCode": code,
-            "weatherCondition": info["condition"],
-            "iconName": info["icon"],
-            "tempMax": round(daily.get("temperature_2m_max", [])[i] if i < len(daily.get("temperature_2m_max", [])) else 0),
-            "tempMin": round(daily.get("temperature_2m_min", [])[i] if i < len(daily.get("temperature_2m_min", [])) else 0),
-            "precipitationSum": float(daily.get("precipitation_sum", [])[i] if i < len(daily.get("precipitation_sum", [])) else 0),
-            "precipitationProbabilityMax": round(daily.get("precipitation_probability_max", [])[i] if i < len(daily.get("precipitation_probability_max", [])) else 0),
-            "windSpeedMax": float(daily.get("wind_speed_10m_max", [])[i] if i < len(daily.get("wind_speed_10m_max", [])) else 0),
+            "date": d_date,
+            "dayLabel": label,
+            "weatherCode": d_code,
+            "weatherCondition": d_info["condition"],
+            "iconName": d_info["icon"],
+            "tempMax": round(d_data.get("temperature_2m_max", [])[i], 1) if i < len(d_data.get("temperature_2m_max", [])) else 0.0,
+            "tempMin": round(d_data.get("temperature_2m_min", [])[i], 1) if i < len(d_data.get("temperature_2m_min", [])) else 0.0,
+            "precipitationSum": round(d_data.get("precipitation_sum", [])[i], 1) if i < len(d_data.get("precipitation_sum", [])) else 0.0,
+            "precipitationProbabilityMax": round(d_data.get("precipitation_probability_max", [])[i]) if i < len(d_data.get("precipitation_probability_max", [])) else 0,
+            "windSpeedMax": round(d_data.get("wind_speed_10m_max", [])[i], 1) if i < len(d_data.get("wind_speed_10m_max", [])) else 0.0,
         })
 
-    result = {
+    return {
         "success": True,
-        "provider": "Open-Meteo (CC BY 4.0)",
+        "provider": "Open-Meteo Free Weather API",
         "providerUrl": "https://open-meteo.com/",
         "isModelForecast": True,
         "lastUpdated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -183,47 +234,38 @@ async def fetch_open_meteo_weather(lat: float, lon: float, city: str = "Unknown"
             "city": city,
             "region": region,
             "country": country,
-            "timezone": data.get("timezone", "auto"),
-            "elevation": data.get("elevation", 0),
         },
         "current": {
-            "time": curr.get("time", ""),
-            "temperature": round(curr.get("temperature_2m", 0), 1),
-            "apparentTemperature": round(curr.get("apparent_temperature", 0), 1),
-            "relativeHumidity": round(curr.get("relative_humidity_2m", 0)),
-            "precipitation": float(curr.get("precipitation", 0)),
-            "rain": float(curr.get("rain", 0)),
-            "weatherCode": current_code,
-            "weatherCondition": current_info["condition"],
-            "iconName": current_info["icon"],
+            "temperature": round(curr.get("temperature_2m", 0.0), 1),
+            "apparentTemperature": round(curr.get("apparent_temperature", curr.get("temperature_2m", 0.0)), 1),
+            "humidity": round(curr.get("relative_humidity_2m", 0)),
+            "weatherCode": code,
+            "weatherCondition": w_info["condition"],
+            "iconName": w_info["icon"],
+            "precipitation": round(curr.get("precipitation", 0.0), 1),
+            "rain": round(curr.get("rain", 0.0), 1),
+            "windSpeed": round(curr.get("wind_speed_10m", 0.0), 1),
+            "windDirection": wind_dir,
+            "windDirectionCardinal": get_wind_cardinal(wind_dir),
             "isDay": bool(curr.get("is_day", 1)),
-            "windSpeed": float(curr.get("wind_speed_10m", 0)),
-            "windDirection": current_wind_dir,
-            "windDirectionCardinal": get_wind_cardinal(current_wind_dir),
+            "timestamp": curr.get("time", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())),
         },
         "hourly": hourly_list,
         "daily": daily_list,
     }
 
-    weather_cache[cache_key] = {"data": result, "timestamp": now}
-    return result
 
-
-async def search_geocoding(query: str) -> List[Dict[str, Any]]:
-    q = (query or "").strip()
-    if not q:
-        return []
-
-    cache_key = q.lower()
+async def search_cities(query: str) -> List[Dict[str, Any]]:
+    cache_key = query.lower().strip()
     now = time.time()
     if cache_key in geocoding_cache:
         cached = geocoding_cache[cache_key]
         if now - cached["timestamp"] < GEOCODING_CACHE_TTL_SEC:
             return cached["results"]
 
-    url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(q)}&count=10&language=en&format=json"
+    url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(query)}&count=10&language=en&format=json"
     try:
-        async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(url, headers={"User-Agent": "FloodGuard/2.1"})
             if resp.status_code != 200:
                 return []
@@ -247,290 +289,165 @@ async def search_geocoding(query: str) -> List[Dict[str, Any]]:
         return []
 
 
-async def fetch_local_news(query: str = "Chennai", region: str = "", country: str = "", country_code: str = "", timezone: str = "") -> Dict[str, Any]:
-    cache_key = f"{query.lower()}_{region.lower()}_{country.lower()}"
-    now = time.time()
-    if cache_key in local_news_cache:
-        cached = local_news_cache[cache_key]
-        if now - cached["timestamp"] < NEWS_CACHE_TTL_SEC:
-            return {
-                "success": True,
-                "query": query,
-                "region": region,
-                "country": country,
-                "countryCode": country_code,
-                "total": len(cached["articles"]),
-                "lastUpdated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(cached["timestamp"])),
-                "isCached": True,
-                "articles": cached["articles"],
-            }
+# ==============================================================================
+# NEWS RSS FEED ACCESS (Genuine Public Feeds with SQLite Caching)
+# ==============================================================================
 
-    hl = "en-IN"
-    gl = "IN"
-    ceid = "IN:en"
-    if country_code in ("US", "USA") or country.lower() == "united states":
-        hl, gl, ceid = "en-US", "US", "US:en"
-    elif country_code in ("GB", "UK") or country.lower() == "united kingdom":
-        hl, gl, ceid = "en-GB", "GB", "GB:en"
-    elif country_code == "JP" or country.lower() == "japan":
-        hl, gl, ceid = "en", "JP", "JP:en"
-    elif country_code:
-        hl, gl, ceid = "en", country_code, f"{country_code}:en"
+NEWS_FEEDS_CONFIG = {
+    "chennai": {
+        "title": "Chennai Flood & Waterlogging Updates",
+        "url": "https://news.google.com/rss/search?q=chennai+floods+when:7d&hl=en-IN&gl=IN&ceid=IN:en",
+        "category": "EXTREME_RAIN_FLOOD",
+        "location": "Chennai / Avadi Basin",
+    },
+    "tamilnadu": {
+        "title": "Tamil Nadu Rainfall & Weather Alerts",
+        "url": "https://news.google.com/rss/search?q=tamil+nadu+rainfall+weather+when:7d&hl=en-IN&gl=IN&ceid=IN:en",
+        "category": "MONSOON_UPDATES",
+        "location": "Tamil Nadu",
+    },
+    "flood_alerts": {
+        "title": "India Flood Warnings & Reservoir Bulletins",
+        "url": "https://news.google.com/rss/search?q=india+flood+alerts+when:7d&hl=en-IN&gl=IN&ceid=IN:en",
+        "category": "DISASTER_ALERTS",
+        "location": "India National",
+    },
+    "disaster_mgmt": {
+        "title": "Disaster Management & Preparedness",
+        "url": "https://news.google.com/rss/search?q=india+disaster+management+flood+relief+when:7d&hl=en-IN&gl=IN&ceid=IN:en",
+        "category": "DISASTER_ALERTS",
+        "location": "National / State",
+    },
+}
 
-    location_part = " ".join([p for p in [query, region, country if country != "India" else ""] if p])
-    search_q = f'{location_part} (flood OR rainfall OR "heavy rain" OR storm OR monsoon OR cyclone OR inundation OR "weather warning" OR alert)'
-    url = f"https://news.google.com/rss/search?q={urllib.parse.quote(search_q)}&hl={hl}&gl={gl}&ceid={ceid}"
-
+async def fetch_rss_feed_articles(feed_key: str, feed_meta: Dict[str, str], client: httpx.AsyncClient) -> List[Dict[str, Any]]:
     articles = []
-    seen = set()
-
     try:
-        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "FloodGuard/2.1"})
-            if resp.status_code == 200:
-                items = re.findall(r'<item>[\s\S]*?</item>', resp.text)
-                for item in items:
-                    title_m = re.search(r'<title>([\s\S]*?)</title>', item)
-                    link_m = re.search(r'<link>([\s\S]*?)</link>', item)
-                    pub_m = re.search(r'<pubDate>([\s\S]*?)</pubDate>', item)
-                    source_m = re.search(r'<source[^>]*>([\s\S]*?)</source>', item)
-                    desc_m = re.search(r'<description>([\s\S]*?)</description>', item)
+        resp = await client.get(feed_meta["url"], headers={"User-Agent": "FloodGuard/2.1 (Open-Source RSS Reader)"})
+        if resp.status_code == 200:
+            root = ET.fromstring(resp.content)
+            items = root.findall("./channel/item")
+            for idx, item in enumerate(items):
+                title = item.findtext("title") or ""
+                link = item.findtext("link") or ""
+                pub_date = item.findtext("pubDate") or ""
+                source_elem = item.find("source")
+                publisher = source_elem.text if source_elem is not None and source_elem.text else "Regional News"
+                desc = item.findtext("description") or ""
 
-                    headline = clean_html_text(title_m.group(1)) if title_m else ""
-                    raw_link = link_m.group(1).strip() if link_m else ""
-                    if not headline or not raw_link.startswith("http"):
-                        continue
-                    norm = re.sub(r'[^a-z0-9]', '', headline.lower())
-                    if norm in seen:
-                        continue
-                    seen.add(norm)
+                headline = clean_html_text(title)
+                snippet = clean_html_text(desc)[:240]
 
-                    publisher = clean_html_text(source_m.group(1)) if source_m else "Regional Wire"
-                    snippet = clean_html_text(desc_m.group(1))[:220] if desc_m else ""
-                    pub_str = pub_m.group(1).strip() if pub_m else ""
-                    articles.append({
-                        "id": f"LOC-{int(time.time()*1000)}-{len(articles)}",
-                        "headline": headline,
-                        "publisher": publisher,
-                        "publishedAt": pub_str or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                        "publishedDate": pub_str[:16] if pub_str else "Today",
-                        "timezoneLabel": timezone or "IST",
-                        "sourceUrl": raw_link,
-                        "locationOrRegion": query or region or "Local",
-                        "category": categorize_weather_headline(headline, snippet),
-                        "region": detect_region(query + " " + country),
-                        "snippet": snippet,
-                        "isOfficialBulletin": bool(re.search(r'imd|noaa|met department|disaster management|collector', (publisher + ' ' + headline).lower())),
-                    })
-                    if len(articles) >= 40:
-                        break
-    except Exception:
-        pass
+                if not headline or not link or not link.startswith("http"):
+                    continue
 
-    # If empty, add default regional weather articles so user always receives active bulletins
-    if not articles:
-        articles.append({
-            "id": f"LOC-DEF-{int(time.time()*1000)}",
-            "headline": f"{query} Meteorological Bulletin: Monsoon & Flood Surveillance Advisory",
-            "publisher": "National Meteorological Service",
-            "publishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "publishedDate": "Today",
-            "timezoneLabel": timezone or "IST",
-            "sourceUrl": "https://mausam.imd.gov.in/",
-            "locationOrRegion": query,
-            "category": "DISASTER_ALERTS",
-            "region": detect_region(query + " " + country),
-            "snippet": f"Active hydrological monitoring across {query} catchment basin. Evacuation corridors on standby.",
-            "isOfficialBulletin": True,
-        })
-
-    local_news_cache[cache_key] = {"articles": articles, "timestamp": now}
-    return {
-        "success": True,
-        "query": query,
-        "region": region,
-        "country": country,
-        "countryCode": country_code,
-        "total": len(articles),
-        "lastUpdated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "articles": articles,
-    }
+                articles.append({
+                    "id": f"RSS-{feed_key}-{idx}-{abs(hash(headline)) % 1000000}",
+                    "headline": headline,
+                    "publisher": publisher,
+                    "publishedAt": pub_date or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "publishedDate": pub_date[:16] if pub_date else "Recent",
+                    "sourceUrl": link,
+                    "snippet": snippet,
+                    "category": categorize_news_headline(headline, snippet),
+                    "region": detect_region(headline + " " + feed_meta["location"]),
+                    "locationOrRegion": feed_meta["location"],
+                    "feedKey": feed_key,
+                })
+    except Exception as e:
+        print(f"Notice: Failed to fetch RSS feed '{feed_key}':", e)
+    return articles
 
 
-async def fetch_global_news(region_filter: str = "ALL", category_filter: str = "ALL") -> Dict[str, Any]:
-    global global_news_cache
-    now = time.time()
-    if global_news_cache and (now - global_news_cache["timestamp"] < NEWS_CACHE_TTL_SEC):
-        filtered = global_news_cache["articles"]
-        if region_filter != "ALL":
-            filtered = [a for a in filtered if a.get("region") == region_filter]
-        if category_filter != "ALL":
-            filtered = [a for a in filtered if a.get("category") == category_filter]
+async def get_floodguard_news(category: str = "all", limit: int = 50) -> Dict[str, Any]:
+    """
+    Standardized news endpoint for FloodGuard 2.1.
+    Retrieves genuine public RSS feeds, validates URLs, deduplicates, and caches in SQLite.
+    """
+    cat_norm = category.lower().strip()
+    cache_key = f"news_{cat_norm}"
+
+    # 1. Check SQLite Cache
+    cached = get_cached_news(cache_key)
+    if cached and not cached.get("isExpired"):
+        articles = cached.get("articles", [])
         return {
             "success": True,
-            "total": len(filtered),
-            "lastUpdated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(global_news_cache["timestamp"])),
+            "category": cat_norm,
+            "total": len(articles[:limit]),
+            "lastUpdated": cached.get("cachedAt", ""),
             "isCached": True,
-            "articles": filtered,
+            "articles": articles[:limit],
         }
 
-    articles = []
-    seen = set()
+    # 2. Fetch from active RSS feeds
+    targets = {}
+    if cat_norm in NEWS_FEEDS_CONFIG:
+        targets[cat_norm] = NEWS_FEEDS_CONFIG[cat_norm]
+    else:
+        # 'all' or combined query
+        targets = NEWS_FEEDS_CONFIG
 
-    # 1. Google global extreme weather RSS
-    try:
-        url = "https://news.google.com/rss/search?q=extreme+weather+OR+cyclone+OR+hurricane+OR+typhoon+OR+heatwave+OR+flood+OR+meteorological&hl=en&gl=US&ceid=US:en"
-        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "FloodGuard/2.1"})
-            if resp.status_code == 200:
-                items = re.findall(r'<item>[\s\S]*?</item>', resp.text)
-                for item in items:
-                    title_m = re.search(r'<title>([\s\S]*?)</title>', item)
-                    link_m = re.search(r'<link>([\s\S]*?)</link>', item)
-                    pub_m = re.search(r'<pubDate>([\s\S]*?)</pubDate>', item)
-                    source_m = re.search(r'<source[^>]*>([\s\S]*?)</source>', item)
-                    desc_m = re.search(r'<description>([\s\S]*?)</description>', item)
+    all_articles = []
+    seen_norm = set()
 
-                    headline = clean_html_text(title_m.group(1)) if title_m else ""
-                    raw_link = link_m.group(1).strip() if link_m else ""
-                    if not headline or not raw_link.startswith("http"):
-                        continue
-                    norm = re.sub(r'[^a-z0-9]', '', headline.lower())
-                    if norm in seen:
-                        continue
-                    seen.add(norm)
+    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+        for f_key, f_meta in targets.items():
+            feed_items = await fetch_rss_feed_articles(f_key, f_meta, client)
+            for art in feed_items:
+                norm_title = re.sub(r'[^a-z0-9]', '', art["headline"].lower())
+                if norm_title not in seen_norm:
+                    seen_norm.add(norm_title)
+                    all_articles.append(art)
 
-                    publisher = clean_html_text(source_m.group(1)) if source_m else "Global Wire"
-                    snippet = clean_html_text(desc_m.group(1))[:220] if desc_m else ""
-                    pub_str = pub_m.group(1).strip() if pub_m else ""
-                    reg = detect_region(headline + " " + publisher)
+    if all_articles:
+        # Cache to SQLite
+        set_cached_news(cache_key, all_articles, ttl_sec=NEWS_CACHE_TTL_SEC)
+        return {
+            "success": True,
+            "category": cat_norm,
+            "total": len(all_articles[:limit]),
+            "lastUpdated": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "isCached": False,
+            "articles": all_articles[:limit],
+        }
 
-                    articles.append({
-                        "id": f"GLB-{int(time.time()*1000)}-{len(articles)}",
-                        "headline": headline,
-                        "publisher": publisher,
-                        "publishedAt": pub_str or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                        "publishedDate": pub_str[:16] if pub_str else "Today",
-                        "timezoneLabel": "UTC",
-                        "sourceUrl": raw_link,
-                        "locationOrRegion": "International" if reg == "GLOBAL" else reg.replace("_", " "),
-                        "category": categorize_weather_headline(headline, snippet),
-                        "region": reg,
-                        "snippet": snippet,
-                        "isOfficialBulletin": bool(re.search(r'noaa|wmo|national weather service|met office|copernicus', (publisher + ' ' + headline).lower())),
-                    })
-                    if len(articles) >= 50:
-                        break
-    except Exception:
-        pass
-
-    # 2. GDACS Disaster Alerts
-    try:
-        gdacs_url = "https://www.gdacs.org/xml/rss.xml"
-        async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as client:
-            gdacs_res = await client.get(gdacs_url, headers={"User-Agent": "FloodGuard/2.1"})
-            if gdacs_res.status_code == 200:
-                items = re.findall(r'<item>[\s\S]*?</item>', gdacs_res.text)
-                for item in items:
-                    title_m = re.search(r'<title>([\s\S]*?)</title>', item)
-                    link_m = re.search(r'<link>([\s\S]*?)</link>', item)
-                    pub_m = re.search(r'<pubDate>([\s\S]*?)</pubDate>', item)
-                    country_m = re.search(r'<gdacs:country>([\s\S]*?)</gdacs:country>', item)
-
-                    headline = clean_html_text(title_m.group(1)) if title_m else ""
-                    raw_link = link_m.group(1).strip() if link_m else ""
-                    if not headline or not raw_link.startswith("http"):
-                        continue
-                    norm = re.sub(r'[^a-z0-9]', '', headline.lower())
-                    if norm in seen:
-                        continue
-                    seen.add(norm)
-
-                    country = clean_html_text(country_m.group(1)) if country_m else "Global"
-                    pub_str = pub_m.group(1).strip() if pub_m else ""
-                    reg = detect_region(country + " " + headline)
-
-                    articles.append({
-                        "id": f"GDACS-{int(time.time()*1000)}-{len(articles)}",
-                        "headline": f"[Alert] {headline}",
-                        "publisher": "GDACS (UN / EC Meteorological Alert)",
-                        "publishedAt": pub_str or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                        "publishedDate": pub_str[:16] if pub_str else "Today",
-                        "timezoneLabel": "UTC",
-                        "sourceUrl": raw_link,
-                        "locationOrRegion": country,
-                        "category": "DISASTER_ALERTS",
-                        "region": reg,
-                        "snippet": f"Official international disaster coordination bulletin for {country}.",
-                        "isOfficialBulletin": True,
-                    })
-                    if len(articles) >= 60:
-                        break
-    except Exception:
-        pass
-
-    # 3. Comprehensive default global articles if external feeds are blocked
-    if not articles:
-        articles = [
-            {
-                "id": f"GLB-DEF-1",
-                "headline": "WMO Severe Storm & Tropical Cyclone Early Warning Advisory",
-                "publisher": "World Meteorological Organization (WMO)",
-                "publishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "publishedDate": "Today",
-                "timezoneLabel": "UTC",
-                "sourceUrl": "https://worldweather.wmo.int/",
-                "locationOrRegion": "International",
-                "category": "CYCLONES_HURRICANES",
-                "region": "GLOBAL",
-                "snippet": "Coordinated multi-hazard early warning systems active for international coastal regions.",
-                "isOfficialBulletin": True,
-            },
-            {
-                "id": f"GLB-DEF-2",
-                "headline": "Copernicus Climate Service: Global Hydrological Precipitation Extremes Monitored",
-                "publisher": "Copernicus Climate Change Service",
-                "publishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "publishedDate": "Today",
-                "timezoneLabel": "UTC",
-                "sourceUrl": "https://climate.copernicus.eu/",
-                "locationOrRegion": "Europe / International",
-                "category": "EXTREME_RAIN_FLOOD",
-                "region": "EUROPE",
-                "snippet": "Satellite telemetry indicates above-average soil saturation across river basins.",
-                "isOfficialBulletin": True,
-            },
-            {
-                "id": f"GLB-DEF-3",
-                "headline": "NOAA National Weather Service Flood Guidance Bulletin",
-                "publisher": "NOAA National Weather Service",
-                "publishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "publishedDate": "Today",
-                "timezoneLabel": "UTC",
-                "sourceUrl": "https://www.weather.gov/",
-                "locationOrRegion": "North America",
-                "category": "DISASTER_ALERTS",
-                "region": "NORTH_AMERICA",
-                "snippet": "Excessive rainfall outlook and flood advisory bulletin across high-risk basins.",
-                "isOfficialBulletin": True,
-            },
-        ]
-
-    global_news_cache = {"articles": articles, "timestamp": now}
-    filtered = articles
-    if region_filter != "ALL":
-        filtered = [a for a in filtered if a.get("region") == region_filter]
-    if category_filter != "ALL":
-        filtered = [a for a in filtered if a.get("category") == category_filter]
+    # 3. Fallback to expired cache if external RSS is temporarily unreachable
+    if cached and cached.get("articles"):
+        return {
+            "success": True,
+            "category": cat_norm,
+            "total": len(cached["articles"][:limit]),
+            "lastUpdated": cached.get("cachedAt", ""),
+            "isCached": True,
+            "cachedFallback": True,
+            "articles": cached["articles"][:limit],
+        }
 
     return {
-        "success": True,
-        "total": len(filtered),
-        "lastUpdated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "articles": filtered,
+        "success": False,
+        "category": cat_norm,
+        "total": 0,
+        "lastUpdated": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "isCached": False,
+        "error": "Currently, no news articles are available. Please try again later.",
+        "articles": [],
     }
 
-get_weather_forecast = fetch_open_meteo_weather
-search_cities = search_geocoding
-get_local_weather_news = fetch_local_news
-get_global_weather_news = fetch_global_news
+
+# Backwards compatibility wrappers
+async def get_weather_forecast(lat: float, lon: float, city: str = "Unknown", region: str = "", country: str = "Unknown") -> Dict[str, Any]:
+    return await fetch_open_meteo_weather(lat=lat, lon=lon, city=city, region=region, country=country)
+
+async def get_local_weather_news(query: str = "Chennai", region: str = "", country: str = "", country_code: str = "", timezone: str = "") -> Dict[str, Any]:
+    q_low = query.lower()
+    if "chennai" in q_low or "avadi" in q_low or "ambattur" in q_low:
+        cat = "chennai"
+    elif "tamil nadu" in q_low:
+        cat = "tamilnadu"
+    else:
+        cat = "all"
+    return await get_floodguard_news(category=cat, limit=40)
+
+async def get_global_weather_news() -> Dict[str, Any]:
+    return await get_floodguard_news(category="flood_alerts", limit=50)

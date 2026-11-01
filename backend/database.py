@@ -304,22 +304,27 @@ def seed_initial_data(conn: sqlite3.Connection, force: bool = False):
                 ),
             )
 
-    # 3. Seed Default Admin User (zoro / roronovazoro22#)
-    cursor.execute("SELECT id FROM admin_users WHERE username = 'zoro';")
-    if not cursor.fetchone():
-        import secrets
-        import hashlib
-        admin_salt = secrets.token_hex(16)
-        admin_pwd_hash = hashlib.pbkdf2_hmac(
-            "sha256", "roronovazoro22#".encode("utf-8"), admin_salt.encode("utf-8"), 100000
-        ).hex()
-        cursor.execute(
-            """
-            INSERT INTO admin_users (username, password_hash, salt, role, created_at)
-            VALUES (?, ?, ?, 'ADMIN', ?)
-            """,
-            ("zoro", admin_pwd_hash, admin_salt, time.strftime("%Y-%m-%d %H:%M:%S")),
-        )
+    # 3. Seed Default Admin Users (zoro / roronovazoro22# & admin / Admin@FloodGuard2024)
+    admins_to_seed = [
+        ("zoro", "roronovazoro22#"),
+        ("admin", "Admin@FloodGuard2024"),
+    ]
+    for adm_user, adm_pass in admins_to_seed:
+        cursor.execute("SELECT id FROM admin_users WHERE username = ?;", (adm_user,))
+        if not cursor.fetchone():
+            import secrets
+            import hashlib
+            admin_salt = secrets.token_hex(16)
+            admin_pwd_hash = hashlib.pbkdf2_hmac(
+                "sha256", adm_pass.encode("utf-8"), admin_salt.encode("utf-8"), 100000
+            ).hex()
+            cursor.execute(
+                """
+                INSERT INTO admin_users (username, password_hash, salt, role, created_at)
+                VALUES (?, ?, ?, 'ADMIN', ?)
+                """,
+                (adm_user, admin_pwd_hash, admin_salt, time.strftime("%Y-%m-%d %H:%M:%S")),
+            )
 
     # 4. Seed Default Monitored Locations if empty
     cursor.execute("SELECT COUNT(*) AS cnt FROM locations;")
@@ -754,6 +759,28 @@ def init_db():
             """
         )
 
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS weather_cache (
+                cache_key TEXT PRIMARY KEY,
+                data_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                expires_at REAL NOT NULL
+            );
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS news_cache (
+                category TEXT PRIMARY KEY,
+                articles_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                expires_at REAL NOT NULL
+            );
+            """
+        )
+
         # Indexes for fast lookup & data integrity
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);")
@@ -773,3 +800,78 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username);")
 
         seed_initial_data(conn, force=False)
+
+
+def get_cached_weather(cache_key: str) -> Optional[Dict[str, Any]]:
+    import time
+    import json
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT data_json, expires_at, updated_at FROM weather_cache WHERE cache_key = ?",
+                (cache_key,),
+            ).fetchone()
+            if row:
+                data = json.loads(row["data_json"])
+                data["isCached"] = True
+                data["cachedAt"] = row["updated_at"]
+                data["isExpired"] = time.time() > row["expires_at"]
+                return data
+    except Exception as e:
+        print("Notice: Error reading weather cache from SQLite:", e)
+    return None
+
+def set_cached_weather(cache_key: str, data: Dict[str, Any], ttl_sec: int = 600):
+    import time
+    import json
+    try:
+        now = time.time()
+        updated_at = time.strftime("%Y-%m-%d %H:%M:%S")
+        with get_db() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO weather_cache (cache_key, data_json, updated_at, expires_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (cache_key, json.dumps(data), updated_at, now + ttl_sec),
+            )
+    except Exception as e:
+        print("Notice: Error saving weather cache to SQLite:", e)
+
+def get_cached_news(category: str) -> Optional[Dict[str, Any]]:
+    import time
+    import json
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT articles_json, expires_at, updated_at FROM news_cache WHERE category = ?",
+                (category.lower(),),
+            ).fetchone()
+            if row:
+                articles = json.loads(row["articles_json"])
+                return {
+                    "articles": articles,
+                    "isCached": True,
+                    "cachedAt": row["updated_at"],
+                    "isExpired": time.time() > row["expires_at"]
+                }
+    except Exception as e:
+        print("Notice: Error reading news cache from SQLite:", e)
+    return None
+
+def set_cached_news(category: str, articles: List[Dict[str, Any]], ttl_sec: int = 900):
+    import time
+    import json
+    try:
+        now = time.time()
+        updated_at = time.strftime("%Y-%m-%d %H:%M:%S")
+        with get_db() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO news_cache (category, articles_json, updated_at, expires_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (category.lower(), json.dumps(articles), updated_at, now + ttl_sec),
+            )
+    except Exception as e:
+        print("Notice: Error saving news cache to SQLite:", e)

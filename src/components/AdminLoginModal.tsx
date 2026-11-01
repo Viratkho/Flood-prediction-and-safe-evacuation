@@ -192,8 +192,32 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">
-              Passwords are salted and verified with 100,000 PBKDF2 iterations in SQLite.
+            <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
+              <span>Verified with 100,000 PBKDF2 iterations in SQLite.</span>
+            </div>
+            {/* Quick Demo Credentials Autofill */}
+            <div className="pt-2 flex flex-wrap gap-1.5 items-center">
+              <span className="text-[10px] uppercase font-mono text-slate-400">Tactical Preset:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setUsername('zoro');
+                  setPassword('roronovazoro22#');
+                }}
+                className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] font-mono text-amber-300 hover:bg-amber-500/20 transition"
+              >
+                zoro / roronovazoro22#
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUsername('admin');
+                  setPassword('Admin@FloodGuard2024');
+                }}
+                className="px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-mono text-cyan-300 hover:bg-cyan-500/20 transition"
+              >
+                admin / Admin@FloodGuard2024
+              </button>
             </div>
           </div>
 
