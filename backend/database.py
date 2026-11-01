@@ -218,6 +218,23 @@ def seed_initial_data(conn: sqlite3.Connection, force: bool = False):
                 ),
             )
 
+        # 0. Seed Default Admin User (zoro / roronovazoro22#)
+    cursor.execute("SELECT id FROM admin_users WHERE username = 'zoro';")
+    if not cursor.fetchone():
+        import secrets
+        import hashlib
+        admin_salt = secrets.token_hex(16)
+        admin_pwd_hash = hashlib.pbkdf2_hmac(
+            "sha256", "roronovazoro22#".encode("utf-8"), admin_salt.encode("utf-8"), 100000
+        ).hex()
+        cursor.execute(
+            """
+            INSERT INTO admin_users (username, password_hash, salt, role, created_at)
+            VALUES (?, ?, ?, 'ADMIN', ?)
+            """,
+            ("zoro", admin_pwd_hash, admin_salt, time.strftime("%Y-%m-%d %H:%M:%S")),
+        )
+
     # 3. Seed Dam State
     cursor.execute("SELECT COUNT(*) AS cnt FROM dam_state;")
     dam_count = cursor.fetchone()["cnt"]
@@ -466,6 +483,39 @@ def init_db():
             );
             """
         )
+
+                # 9. Admin Users Table (Role-Based Access Control)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'ADMIN',
+                created_at TEXT NOT NULL
+            );
+            """
+        )
+
+        # 10. Admin Active Sessions Table
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_sessions (
+                session_token TEXT PRIMARY KEY,
+                admin_id INTEGER NOT NULL,
+                username TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'ADMIN',
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                FOREIGN KEY (admin_id) REFERENCES admin_users(id) ON DELETE CASCADE
+            );
+            """
+        )
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_sessions_token ON admin_sessions(session_token);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);")
 
         # Indexes for fast lookup
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_people_priority ON people(rescue_priority);")

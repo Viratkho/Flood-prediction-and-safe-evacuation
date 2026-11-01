@@ -2,7 +2,8 @@ import json
 import time
 from datetime import datetime
 from typing import Dict, Any, List
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Response, Request
+from backend.api.auth_admin import check_admin_rbac
 from fastapi.responses import JSONResponse
 from backend.database import get_db, SEED_DATA_PATH
 from backend.models import person_row_to_dict
@@ -42,7 +43,8 @@ def get_scenarios():
     return SCENARIOS
 
 @router.post("/api/research/run-scenario")
-def run_scenario(payload: Dict[str, Any] = None):
+def run_scenario(request: Request, payload: Dict[str, Any] = None):
+    check_admin_rbac(request)
     payload = payload or {}
     scenario_id = payload.get("scenarioId")
     scenario = next((s for s in SCENARIOS if s["id"] == scenario_id), None)

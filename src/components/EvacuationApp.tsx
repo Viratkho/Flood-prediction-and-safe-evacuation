@@ -3,18 +3,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 
 import {
-
   SharedLocationState,
   RoadNode,
-
   RoadSegment,
-
   ReliefCentre,
-
   EvacuationRoute,
-
   FloodStatus,
-
+  ManeuverType,
 } from '../types/floodguard';
 
 import { computeSafestRoute, haversineDistanceM } from '../services/routingEngine';
@@ -22,35 +17,30 @@ import { computeSafestRoute, haversineDistanceM } from '../services/routingEngin
 import { voiceNav } from '../services/voiceNav';
 
 import {
-
   AlertCircle,
-
   AlertTriangle,
-
   ArrowRight,
-
+  ArrowUp,
+  ArrowUpLeft,
+  ArrowUpRight,
+  CornerUpLeft,
+  CornerUpRight,
+  RotateCw,
+  Clock,
+  Milestone,
   CheckCircle2,
-
   ChevronRight,
-
+  ChevronLeft,
+  Compass,
   Crosshair,
-
   MapPin,
-
   Navigation,
-
   Play,
-
   RotateCcw,
-
   Shield,
-
   Volume2,
-
   VolumeX,
-
   Footprints,
-
 } from 'lucide-react';
 
 
@@ -127,6 +117,39 @@ export const EvacuationApp: React.FC<EvacuationAppProps> = ({
   const [isPickingOriginOnMap, setIsPickingOriginOnMap] = useState(false);
 
     const [isWalkingSimulation, setIsWalkingSimulation] = useState(false);
+  const [navStepIndex, setNavStepIndex] = useState(0);
+  const [isNavHudExpanded, setIsNavHudExpanded] = useState(true);
+
+  // Helper to render Google Maps-style maneuver turn icons
+  const renderManeuverIcon = (maneuver?: ManeuverType, className = "w-6 h-6") => {
+    switch (maneuver) {
+      case 'TURN_LEFT':
+        return <CornerUpLeft className={`${className} text-emerald-400`} />;
+      case 'TURN_RIGHT':
+        return <CornerUpRight className={`${className} text-emerald-400`} />;
+      case 'SLIGHT_LEFT':
+        return <ArrowUpLeft className={`${className} text-emerald-400`} />;
+      case 'SLIGHT_RIGHT':
+        return <ArrowUpRight className={`${className} text-emerald-400`} />;
+      case 'SHARP_LEFT':
+      case 'U_TURN':
+        return <RotateCcw className={`${className} text-amber-400`} />;
+      case 'SHARP_RIGHT':
+        return <RotateCw className={`${className} text-amber-400`} />;
+      case 'ARRIVE':
+        return <CheckCircle2 className={`${className} text-emerald-400`} />;
+      case 'DEPART':
+        return <Navigation className={`${className} text-sky-400`} />;
+      case 'STRAIGHT':
+      default:
+        return <ArrowUp className={`${className} text-emerald-400`} />;
+    }
+  };
+
+  const getEstimatedArrivalClock = (minutes: number) => {
+    const arrivalDate = new Date(Date.now() + minutes * 60000);
+    return arrivalDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
   const [mobileActiveView, setMobileActiveView] = useState<'MAP' | 'DIRECTIONS'>('MAP');
   const walkIntervalRef = useRef<number | null>(null);
 
@@ -383,6 +406,7 @@ export const EvacuationApp: React.FC<EvacuationAppProps> = ({
     const route = computeSafestRoute(userLocation, selectedShelter, nodes, segments);
 
     setActiveRoute(route);
+    setNavStepIndex(0);
 
 
 
@@ -543,6 +567,15 @@ export const EvacuationApp: React.FC<EvacuationAppProps> = ({
       const nextCoord = coords[stepIndex];
 
       onUpdateLocation(nextCoord, true);
+
+      // Dynamically advance turn step indicator if matching
+      if (activeRoute && activeRoute.steps.length > 0) {
+        const nextStepIdx = Math.min(
+          activeRoute.steps.length - 1,
+          Math.floor((stepIndex / coords.length) * activeRoute.steps.length)
+        );
+        setNavStepIndex(nextStepIdx);
+      }
 
 
 
@@ -1055,76 +1088,89 @@ export const EvacuationApp: React.FC<EvacuationAppProps> = ({
 
 
 
-        {/* Turn-by-Turn Navigation Step List */}
-
+        {/* Turn-by-Turn Navigation Step List (Google Maps-Style Timeline) */}
         <div className="flex-1 p-4 space-y-2">
-
           <div className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
-
-            <span>Turn-by-Turn Waypoints</span>
-
-            <span className="text-sky-400">{activeRoute?.steps.length || 0} Steps</span>
-
+            <span className="flex items-center gap-1.5 text-emerald-400">
+              <Milestone className="w-3.5 h-3.5" />
+              <span>Turn-by-Turn Route Guidance</span>
+            </span>
+            <span className="text-sky-400 font-bold">{activeRoute?.steps.length || 0} Steps</span>
           </div>
 
-
-
-          {activeRoute?.steps.map((step, idx) => (
-
-            <div
-
-              key={idx}
-
-              className="bg-slate-950/60 hover:bg-slate-950/90 p-2.5 rounded-lg border border-slate-800/80 text-xs space-y-1 transition"
-
-            >
-
-              <div className="flex items-start gap-2">
-
-                <div className="w-5 h-5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-mono text-[10px] text-sky-400 flex-shrink-0 mt-0.5">
-
-                  {idx + 1}
-
-                </div>
-
-                <div className="flex-1">
-
-                  <div className="font-semibold text-white leading-snug">{step.instruction}</div>
-
-                  <div className="flex items-center gap-3 text-[11px] text-slate-400 font-mono mt-0.5">
-
-                    <span>{step.distanceM}m</span>
-
-                    <span>•</span>
-
-                    <span className={step.waterLevelCm > 25 ? 'text-amber-400 font-semibold' : 'text-slate-400'}>
-
-                      Depth: {step.waterLevelCm}cm
-
-                    </span>
-
-                    <span>•</span>
-
-                    <span className={`font-semibold ${
-
-                      step.riskStatus === 'SAFE' ? 'text-emerald-400' : 'text-amber-400'
-
-                    }`}>
-
-                      {step.riskStatus}
-
-                    </span>
-
+          {activeRoute?.steps.map((step, idx) => {
+            const isCurrentStep = idx === navStepIndex;
+            return (
+              <div
+                key={idx}
+                onClick={() => {
+                  setNavStepIndex(idx);
+                  if (step.startCoordinate && mapInstanceRef.current) {
+                    mapInstanceRef.current.setView(step.startCoordinate, 16);
+                  }
+                  if (voiceEnabled) {
+                    voiceNav.speak(step.instruction);
+                  }
+                }}
+                className={`p-3 rounded-xl border text-xs space-y-1.5 transition cursor-pointer ${
+                  isCurrentStep
+                    ? 'bg-emerald-950/70 border-emerald-500 shadow-md ring-1 ring-emerald-500/50'
+                    : 'bg-slate-950/60 hover:bg-slate-950/90 border-slate-800/80'
+                }`}
+              >
+                <div className="flex items-start gap-2.5">
+                  <div className={`w-8 h-8 rounded-full border flex items-center justify-center flex-shrink-0 mt-0.5 shadow ${
+                    isCurrentStep
+                      ? 'bg-emerald-600 border-emerald-400 text-white animate-pulse'
+                      : 'bg-slate-900 border-slate-700 text-slate-300'
+                  }`}>
+                    {renderManeuverIcon(step.maneuver, "w-4 h-4")}
                   </div>
 
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <span className={`font-mono font-bold text-[11px] ${
+                        isCurrentStep ? 'text-emerald-300' : 'text-sky-400'
+                      }`}>
+                        {step.formattedDistance || `${step.distanceM}m`}
+                      </span>
+                      {isCurrentStep && (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500 text-slate-950 tracking-wider">
+                          NEXT STEP
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="font-bold text-white text-xs leading-snug">
+                      {step.shortInstruction || step.instruction}
+                    </div>
+
+                    <div className="text-[11px] text-slate-400 mt-0.5 leading-tight">
+                      {step.instruction}
+                    </div>
+
+                    <div className="flex items-center gap-2.5 text-[10px] text-slate-400 font-mono mt-1 pt-1 border-t border-slate-800/60">
+                      <span className={step.waterLevelCm > 25 ? 'text-amber-400 font-semibold' : 'text-slate-400'}>
+                        Water: {step.waterLevelCm}cm
+                      </span>
+                      <span>•</span>
+                      <span className={`font-semibold ${
+                        step.riskStatus === 'SAFE' ? 'text-emerald-400' : 'text-amber-400'
+                      }`}>
+                        {step.riskStatus}
+                      </span>
+                      {step.turnAngleDeg !== undefined && step.turnAngleDeg !== 0 && (
+                        <>
+                          <span>•</span>
+                          <span>Angle: {step.turnAngleDeg > 0 ? `+${step.turnAngleDeg}°` : `${step.turnAngleDeg}°`}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
-
               </div>
-
-            </div>
-
-          ))}
-
+            );
+          })}
         </div>
 
 
@@ -1196,34 +1242,176 @@ export const EvacuationApp: React.FC<EvacuationAppProps> = ({
 
 
 
+        {/* Google Maps-Style Turn-by-Turn HUD (Top Navigation Banner) */}
+        {activeRoute && activeRoute.steps.length > 0 && isNavHudExpanded && (
+          <div className="absolute top-3 left-3 right-14 md:left-4 md:right-16 max-w-xl mx-auto z-20 animate-in fade-in slide-in-from-top duration-200">
+            {(() => {
+              const currentStep = activeRoute.steps[navStepIndex] || activeRoute.steps[0];
+              const nextStep = activeRoute.steps[navStepIndex + 1];
+              return (
+                <div className="bg-emerald-950/95 backdrop-blur-md rounded-2xl border-2 border-emerald-500/80 shadow-2xl p-3 text-white">
+                  <div className="flex items-center gap-3">
+                    {/* Big Maneuver Icon */}
+                    <div className="w-12 h-12 rounded-xl bg-emerald-600/90 border border-emerald-400/80 flex items-center justify-center shrink-0 shadow-lg">
+                      {renderManeuverIcon(currentStep.maneuver, "w-7 h-7")}
+                    </div>
+
+                    {/* Maneuver Distance & Instructions */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-extrabold text-emerald-300 uppercase tracking-wider">
+                          In {currentStep.formattedDistance || `${currentStep.distanceM}m`}
+                        </span>
+                        <span className="text-[10px] font-mono bg-emerald-900/80 px-2 py-0.5 rounded-full border border-emerald-700 text-emerald-200">
+                          Step {navStepIndex + 1} of {activeRoute.steps.length}
+                        </span>
+                      </div>
+                      <div className="text-sm md:text-base font-extrabold text-white truncate leading-tight mt-0.5">
+                        {currentStep.shortInstruction || currentStep.instruction}
+                      </div>
+                      {nextStep && (
+                        <div className="text-[11px] text-emerald-200/80 truncate mt-0.5 flex items-center gap-1 font-mono">
+                          <span>Then:</span>
+                          <span className="font-bold text-white truncate">{nextStep.shortInstruction || nextStep.instruction}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Step Navigation Controls */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => {
+                          const prevIdx = Math.max(0, navStepIndex - 1);
+                          setNavStepIndex(prevIdx);
+                          const st = activeRoute.steps[prevIdx];
+                          if (st.startCoordinate && mapInstanceRef.current) {
+                            mapInstanceRef.current.setView(st.startCoordinate, 16);
+                          }
+                          if (voiceEnabled) voiceNav.speak(st.instruction);
+                        }}
+                        disabled={navStepIndex === 0}
+                        className="p-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 text-white disabled:opacity-30 disabled:cursor-not-allowed border border-emerald-700/60 transition"
+                        title="Previous Step"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const nextIdx = Math.min(activeRoute.steps.length - 1, navStepIndex + 1);
+                          setNavStepIndex(nextIdx);
+                          const st = activeRoute.steps[nextIdx];
+                          if (st.startCoordinate && mapInstanceRef.current) {
+                            mapInstanceRef.current.setView(st.startCoordinate, 16);
+                          }
+                          if (voiceEnabled) voiceNav.speak(st.instruction);
+                        }}
+                        disabled={navStepIndex === activeRoute.steps.length - 1}
+                        className="p-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 text-white disabled:opacity-30 disabled:cursor-not-allowed border border-emerald-700/60 transition"
+                        title="Next Step"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (voiceEnabled) {
+                            voiceNav.speak(currentStep.instruction);
+                          }
+                        }}
+                        className="p-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 text-emerald-300 border border-emerald-700/60 transition"
+                        title="Repeat Voice Direction"
+                      >
+                        <Volume2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Water level & road status badge */}
+                  <div className="mt-2 pt-2 border-t border-emerald-800/80 flex items-center justify-between text-[11px] font-mono">
+                    <span className="flex items-center gap-1.5 text-emerald-200">
+                      <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{currentStep.roadName}</span>
+                    </span>
+                    <span className={`font-bold ${
+                      currentStep.waterLevelCm > 25 ? 'text-amber-300' : 'text-emerald-300'
+                    }`}>
+                      Depth: {currentStep.waterLevelCm}cm • {currentStep.riskStatus}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Google Maps-Style Navigation Footer Dock (Bottom HUD) */}
+        {activeRoute && (
+          <div className="absolute bottom-3 left-3 right-3 md:left-6 md:right-6 max-w-xl mx-auto z-20">
+            <div className="bg-slate-950/95 backdrop-blur-md rounded-2xl border border-slate-800 shadow-2xl p-3 text-white flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="text-lg md:text-xl font-extrabold text-white font-mono leading-none">
+                    ~{activeRoute.estimatedMinutes} <span className="text-xs text-slate-400 font-sans">min</span>
+                  </div>
+                  <span className="text-slate-500">•</span>
+                  <div className="text-xs font-mono text-[#38bdf8] font-bold">
+                    {(activeRoute.totalDistanceM / 1000).toFixed(1)} km
+                  </div>
+                  <span className="text-slate-500">•</span>
+                  <div className="text-xs font-mono text-emerald-400 font-bold flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    <span>ETA {getEstimatedArrivalClock(activeRoute.estimatedMinutes)}</span>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-300 truncate mt-1 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                  <span className="truncate">Destination: <strong>{selectedShelter.name}</strong></span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={toggleWalkingSimulation}
+                  className={`px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition shadow ${
+                    isWalkingSimulation
+                      ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                  }`}
+                  title="Simulate walking step-by-step along evacuation route"
+                >
+                  <Footprints className="w-4 h-4" />
+                  <span className="hidden sm:inline">{isWalkingSimulation ? 'Pause Walk' : 'Test Walk'}</span>
+                </button>
+
+                <button
+                  onClick={() => setIsNavHudExpanded(prev => !prev)}
+                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-mono"
+                  title="Toggle Turn Banner"
+                >
+                  {isNavHudExpanded ? 'HUD' : 'Show'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Floating Quick Stats on Map */}
-
         <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
-
           <button
-
             onClick={() => {
-
               if (mapInstanceRef.current) {
-
                 mapInstanceRef.current.setView(userLocation, 15);
-
               }
-
             }}
-
             className="p-2.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-800 text-white shadow-xl hover:bg-slate-800 transition"
-
             title="Center on My GPS"
-
           >
-
             <Crosshair className="w-5 h-5 text-sky-400" />
-
           </button>
-
         </div>
-
       </div>
 
     </div>

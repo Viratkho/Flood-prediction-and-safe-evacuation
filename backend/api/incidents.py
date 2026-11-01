@@ -1,7 +1,8 @@
 import time
 import json
 from typing import Dict, Any, Optional
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from backend.api.auth_admin import check_admin_rbac
 from fastapi.responses import JSONResponse
 from backend.database import get_db
 from backend.models import incident_row_to_dict
@@ -76,7 +77,8 @@ def acknowledge_incident(incident_id: str, payload: Dict[str, Any] = None):
     return {"success": True, "incident": incident}
 
 @router.post("/api/incidents/{incident_id}/assign")
-def assign_incident(incident_id: str, payload: Dict[str, Any] = None):
+def assign_incident(incident_id: str, request: Request, payload: Dict[str, Any] = None):
+    check_admin_rbac(request)
     payload = payload or {}
     responder_id = payload.get("responderId")
     responder_name = payload.get("responderName") or "Tactical Rescue Unit"
@@ -170,7 +172,8 @@ def update_incident_status(incident_id: str, payload: Dict[str, Any] = None):
     return {"success": True, "incident": incident}
 
 @router.post("/api/incidents/{incident_id}/resolve")
-def resolve_incident(incident_id: str, payload: Dict[str, Any] = None):
+def resolve_incident(incident_id: str, request: Request, payload: Dict[str, Any] = None):
+    check_admin_rbac(request)
     payload = payload or {}
     notes = payload.get("notes") or "Extracted safely to relief shelter"
     operator = payload.get("operator") or payload.get("operatorName") or "Duty Commander"

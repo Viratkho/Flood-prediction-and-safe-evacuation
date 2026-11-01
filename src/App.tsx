@@ -14,6 +14,8 @@ import { FirewallSecurityModal } from './components/FirewallSecurityModal';
 import { SystemTestRunnerModal } from './components/SystemTestRunnerModal';
 import { DeviceAQrScannerModal } from './components/DeviceAQrScannerModal';
 import { DeviceBQrLoginModal } from './components/DeviceBQrLoginModal';
+import { WelcomePage } from './components/WelcomePage';
+import { AdminLoginModal } from './components/AdminLoginModal';
 import {
   BASIN_CENTER,
   INITIAL_ROAD_NODES,
@@ -75,6 +77,7 @@ import {
 } from 'lucide-react';
 
 type TabView =
+  | 'welcome'
   | 'command-center'
   | 'evacuation-app'
   | 'weather-news'
@@ -84,7 +87,47 @@ type TabView =
   | 'research-simulation';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabView>('person-intake');
+  const [activeTab, setActiveTab] = useState<TabView>('welcome');
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [adminUser, setAdminUser] = useState<{ username: string; role: string; token: string } | null>(() => {
+    try {
+      const saved = localStorage.getItem('floodguard_admin_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.token && parsed.username) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not read saved admin session:', e);
+    }
+    return null;
+  });
+
+  const handleAdminLogout = async () => {
+    try {
+      await fetch('/api/auth/admin/logout', {
+        method: 'POST',
+        headers: adminUser?.token ? { Authorization: `Bearer ${adminUser.token}` } : {},
+      });
+    } catch {}
+    try {
+      localStorage.removeItem('floodguard_admin_session');
+    } catch {}
+    setAdminUser(null);
+    if (activeTab === 'command-center') {
+      setActiveTab('welcome');
+    }
+    voiceNav.speak('Administrator session ended.');
+  };
+
+  const handleOpenCommandCenter = () => {
+    if (!adminUser) {
+      setIsAdminModalOpen(true);
+    } else {
+      setActiveTab('command-center');
+    }
+  };
   const [isOfflineManagerOpen, setIsOfflineManagerOpen] = useState(false);
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
   const [isIntakeModalOpen, setIsIntakeModalOpen] = useState(false);
@@ -893,7 +936,19 @@ export default function App() {
         {/* Primary View Switcher Navigation Tabs */}
         <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 shadow-inner overflow-x-auto max-w-full">
           <button
-            onClick={() => setActiveTab('command-center')}
+            onClick={() => setActiveTab('welcome')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'welcome'
+                ? 'bg-emerald-600 text-white shadow-lg'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <LifeBuoy className="w-4 h-4 text-emerald-400" />
+            <span>Welcome</span>
+          </button>
+
+          <button
+            onClick={handleOpenCommandCenter}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'command-center'
                 ? 'bg-slate-800 text-white shadow'
@@ -902,6 +957,7 @@ export default function App() {
           >
             <Compass className="w-4 h-4 text-[#ff7700]" />
             <span>Command Center</span>
+            {!adminUser && <Lock className="w-3 h-3 text-amber-400 ml-0.5" />}
           </button>
 
           <button
@@ -979,6 +1035,29 @@ export default function App() {
 
         {/* Global Action Modals: Security Badge, Mobile Alert, Offline Pack & AI Assistant */}
         <div className="flex items-center gap-2">
+          {/* Admin Authentication Status Badge */}
+          {adminUser ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-950/70 border border-amber-500/40 text-[11px] font-mono text-amber-300 shadow-sm">
+              <Shield className="w-3.5 h-3.5 text-amber-400" />
+              <span className="font-bold">ADMIN: {adminUser.username}</span>
+              <button
+                onClick={handleAdminLogout}
+                className="ml-1 px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[10px] transition"
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsAdminModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-mono text-amber-300 hover:text-amber-200 transition"
+              title="Log in as Administrator (zoro / roronovazoro22#)"
+            >
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <span>ADMIN LOGIN</span>
+            </button>
+          )}
+
           {/* Device A: Scan QR to Log In on Another Device Trigger */}
           <button
             onClick={() => setIsDeviceAQrModalOpen(true)}
@@ -1087,8 +1166,23 @@ export default function App() {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <button
                 onClick={() => {
-                  setActiveTab('command-center');
+                  setActiveTab('welcome');
                   setIsMobileMenuOpen(false);
+                }}
+                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                  activeTab === 'welcome'
+                    ? 'bg-emerald-600 text-white border-white'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`}
+              >
+                <LifeBuoy className="w-4 h-4 text-emerald-400" />
+                <span>Welcome Page</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  handleOpenCommandCenter();
                 }}
                 className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
                   activeTab === 'command-center'
@@ -1098,6 +1192,7 @@ export default function App() {
               >
                 <Compass className="w-4 h-4 text-[#ff7700]" />
                 <span>Command Center</span>
+                {!adminUser && <Lock className="w-3.5 h-3.5 text-amber-400 ml-auto" />}
               </button>
 
               <button
@@ -1337,6 +1432,24 @@ export default function App() {
           />
         ) : (
           <>
+        {activeTab === 'welcome' && (
+          <WelcomePage
+            onGetStarted={() => setActiveTab('person-intake')}
+            onUserLogin={() => {
+              const registered = people.find((p) => p.isUserRegistered);
+              if (registered) {
+                setSelectedAlertPerson(registered);
+                setIsWatchGlanceMode(true);
+              } else {
+                setIsDeviceBQrModalOpen(true);
+              }
+            }}
+            onAdminLogin={() => setIsAdminModalOpen(true)}
+            registeredCount={people.length}
+            activeSensorsCount={sensors.length}
+          />
+        )}
+
         {activeTab === 'command-center' && (
           <RescueCommandCenter
             sensors={sensors}
@@ -1620,6 +1733,17 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Administrator Authentication Modal (RBAC Gate) */}
+      <AdminLoginModal
+        isOpen={isAdminModalOpen}
+        onClose={() => setIsAdminModalOpen(false)}
+        onLoginSuccess={(info) => {
+          setAdminUser(info);
+          setActiveTab('command-center');
+          voiceNav.speak('Administrator verified. Command Center unlocked.');
+        }}
+      />
     </div>
   );
 }

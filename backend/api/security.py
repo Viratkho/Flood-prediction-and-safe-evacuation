@@ -1,7 +1,8 @@
 import os
 from datetime import datetime
 from typing import Dict, Any
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from backend.api.auth_admin import check_admin_rbac
 from backend.middleware.waf import waf_state
 
 router = APIRouter()
@@ -73,7 +74,8 @@ def test_firewall(payload: Dict[str, Any] = None):
     }
 
 @router.post("/api/security/firewall-clear-quarantine")
-def clear_quarantine():
+def clear_quarantine(request: Request):
+    check_admin_rbac(request)
     released = waf_state.clear_quarantine()
     return {
         "success": True,

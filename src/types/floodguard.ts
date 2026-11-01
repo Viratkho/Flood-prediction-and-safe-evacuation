@@ -262,6 +262,18 @@ export interface DamTelemetry {
   }>;
 }
 
+export type ManeuverType =
+  | 'DEPART'
+  | 'STRAIGHT'
+  | 'TURN_LEFT'
+  | 'TURN_RIGHT'
+  | 'SLIGHT_LEFT'
+  | 'SLIGHT_RIGHT'
+  | 'SHARP_LEFT'
+  | 'SHARP_RIGHT'
+  | 'U_TURN'
+  | 'ARRIVE';
+
 export interface RouteStep {
   instruction: string;
   roadName: string;
@@ -269,6 +281,13 @@ export interface RouteStep {
   segmentId: string;
   waterLevelCm: number;
   riskStatus: FloodStatus;
+  maneuver?: ManeuverType;
+  shortInstruction?: string;
+  turnAngleDeg?: number;
+  bearingDeg?: number;
+  formattedDistance?: string;
+  startCoordinate?: [number, number];
+  endCoordinate?: [number, number];
 }
 
 export interface EvacuationRoute {
