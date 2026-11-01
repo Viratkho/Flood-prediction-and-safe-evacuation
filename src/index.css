@@ -111,3 +111,31 @@
 .animate-radar-ping {
   animation: radar-beacon-pulse 1.8s cubic-bezier(0, 0.2, 0.8, 1) infinite;
 }
+
+/* Vertical Character Slide-Down Text Clip Animation (100% Free & Native) */
+@keyframes charSlideDown {
+  0% {
+    transform: translateY(-115%);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(0%);
+    opacity: 1;
+  }
+}
+
+.char-clip-inner {
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .char-clip-inner {
+    transform: translateY(0%) !important;
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
+

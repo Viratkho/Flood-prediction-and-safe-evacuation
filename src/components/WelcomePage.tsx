@@ -1,4 +1,5 @@
 import React from 'react';
+import { TextClipReveal } from './common/TextClipReveal';
 import {
   Shield,
   Activity,
@@ -93,15 +94,31 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
             <span>FloodGuard 2.1 • Complete Free Local Tactical Evacuation System</span>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
-            Predict Floods. Protect Lives. <br />
-            <span className="bg-gradient-to-r from-sky-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent">
-              Safe Turn-by-Turn Evacuation
-            </span>
-          </h1>
+          <div className="space-y-3 py-2">
+            {/* Primary Project Brand Heading with Strongest Letter-by-Letter Slide-Down Animation */}
+            <TextClipReveal
+              text="FLOODGUARD"
+              as="h1"
+              className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tight text-white leading-none uppercase select-none font-mono"
+              charClassName="text-white drop-shadow-[0_4px_24px_rgba(56,189,248,0.25)]"
+              charDelayMs={55}
+              initialDelayMs={120}
+              durationMs={600}
+            />
 
-          <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-            FloodGuard is a zero-cost, community-first emergency defense platform combining IoT hydrological sensing, wearable physiological telemetry, LoRa off-grid networking, and Google Maps-style safe ground navigation.
+            {/* Supporting Tagline with Subtle Staggered Slide-Down Reveal */}
+            <TextClipReveal
+              text="Smarter Detection. Safer Routes. Faster Rescue."
+              as="p"
+              className="text-lg sm:text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-sky-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent"
+              charDelayMs={22}
+              initialDelayMs={780}
+              durationMs={480}
+            />
+          </div>
+
+          <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl mx-auto">
+            Predict Floods. Protect Lives. Community-first emergency defense platform combining IoT hydrological sensing, wearable physiological telemetry, LoRa off-grid mesh, and Google Maps-style safe ground navigation.
           </p>
 
           {/* 3 Entry Action Buttons */}
