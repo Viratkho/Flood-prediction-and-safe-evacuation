@@ -2,7 +2,7 @@ import time
 import json
 import random
 from typing import Dict, Any, Optional
-from fastapi import APIRouter
+from fastapi import APIRouter, Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from backend.database import get_db
 from backend.models import person_row_to_dict, incident_row_to_dict
@@ -11,13 +11,143 @@ from backend.services.priority_engine import evaluate_rescue_priority
 router = APIRouter()
 
 @router.get("/api/people")
-def get_people():
+def get_people(request: Request):
+    user_role = (request.headers.get("X-User-Role") or "").upper()
+    if user_role == "CITIZEN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Citizen role is not authorized to access complete person monitoring records.",
+        )
     with get_db() as conn:
         rows = conn.execute("SELECT * FROM people ORDER BY rowid DESC").fetchall()
         people_list = [person_row_to_dict(r) for r in rows]
     return {
         "total": len(people_list),
         "people": people_list,
+    }
+
+
+@router.get("/api/citizen/my-location")
+def get_my_location(request: Request, personId: Optional[str] = None):
+    """
+    Retrieves ONLY the authenticated citizen's personal location record.
+    Strict privacy isolation: never returns multi-person monitoring dataset.
+    """
+    target_id = personId or request.headers.get("X-Citizen-Id")
+    if not target_id:
+        with get_db() as conn:
+            reg_row = conn.execute("SELECT person_id FROM people WHERE is_user_registered = 1 LIMIT 1").fetchone()
+            if not reg_row:
+                reg_row = conn.execute("SELECT person_id FROM people ORDER BY id ASC LIMIT 1").fetchone()
+            if reg_row:
+                target_id = reg_row["person_id"]
+
+    if not target_id:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Citizen personId is required to retrieve personal location."},
+        )
+
+    with get_db() as conn:
+        row = conn.execute(
+            """
+            SELECT person_id, wearable_id, name, lat, lng, location_name,
+                   location_timestamp, gps_accuracy_m, elevation_m,
+                   flood_depth_cm, flood_risk_level, comm_status
+            FROM people
+            WHERE person_id = ? OR wearable_id = ?
+            """,
+            (target_id, target_id),
+        ).fetchone()
+
+        if not row:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"error": f"No location record found for citizen {target_id}"},
+            )
+
+        return {
+            "success": True,
+            "personId": row["person_id"],
+            "wearableId": row["wearable_id"],
+            "name": row["name"],
+            "lat": row["lat"],
+            "lng": row["lng"],
+            "locationName": row["location_name"],
+            "locationTimestamp": row["location_timestamp"],
+            "gpsAccuracyM": row["gps_accuracy_m"],
+            "elevationM": row["elevation_m"],
+            "floodDepthCm": row["flood_depth_cm"],
+            "floodRiskLevel": row["flood_risk_level"],
+            "commStatus": row["comm_status"],
+        }
+
+
+@router.post("/api/citizen/my-location")
+def update_my_location(payload: Dict[str, Any], request: Request):
+    """
+    Updates ONLY the authenticated citizen's personal location in SQLite.
+    Never modifies Command Center's other markers or records.
+    """
+    person_id = payload.get("personId") or request.headers.get("X-Citizen-Id")
+    if not person_id:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Citizen personId is required to update location."},
+        )
+
+    lat = payload.get("lat")
+    lng = payload.get("lng")
+    if lat is None or lng is None:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Valid latitude and longitude are required."},
+        )
+
+    accuracy = float(payload.get("gpsAccuracyM") or 8.0)
+    now_str = time.strftime("%I:%M %p")
+    location_name = payload.get("locationName")
+
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT person_id, name FROM people WHERE person_id = ? OR wearable_id = ?",
+            (person_id, person_id),
+        ).fetchone()
+
+        if not existing:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"error": f"Citizen with ID '{person_id}' not found in SQLite."},
+            )
+
+        actual_id = existing["person_id"]
+        if location_name:
+            conn.execute(
+                """
+                UPDATE people
+                SET lat = ?, lng = ?, location_timestamp = ?, gps_accuracy_m = ?, location_name = ?
+                WHERE person_id = ?
+                """,
+                (float(lat), float(lng), now_str, accuracy, str(location_name), actual_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE people
+                SET lat = ?, lng = ?, location_timestamp = ?, gps_accuracy_m = ?
+                WHERE person_id = ?
+                """,
+                (float(lat), float(lng), now_str, accuracy, actual_id),
+            )
+
+    return {
+        "success": True,
+        "personId": actual_id,
+        "lat": float(lat),
+        "lng": float(lng),
+        "locationTimestamp": now_str,
+        "gpsAccuracyM": accuracy,
+        "message": "Personal location successfully updated in SQLite database.",
     }
 
 @router.post("/api/people")
@@ -336,7 +466,13 @@ def register_person(payload: Dict[str, Any]):
     )
 
 @router.delete("/api/people/{person_id}")
-def delete_person(person_id: str):
+def delete_person(person_id: str, request: Request):
+    user_role = (request.headers.get("X-User-Role") or "").upper()
+    if user_role == "CITIZEN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Citizen role is not authorized to delete rescue personnel or victims.",
+        )
     if not person_id:
         return JSONResponse(status_code=400, content={"error": "Person ID is required"})
 

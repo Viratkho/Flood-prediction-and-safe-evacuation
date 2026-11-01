@@ -84,7 +84,13 @@ interface SystemStatus {
   };
 }
 
-export const FloodPredictionStudio: React.FC = () => {
+interface FloodPredictionStudioProps {
+  isAdmin?: boolean;
+}
+
+export const FloodPredictionStudio: React.FC<FloodPredictionStudioProps> = ({
+  isAdmin = false,
+}) => {
   // Form State
   const [locationName, setLocationName] = useState('Avadi Bus Terminus Junction');
   const [latitude, setLatitude] = useState<number>(13.1182);
@@ -373,15 +379,17 @@ export const FloodPredictionStudio: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleBackup}
-              disabled={isBackingUp}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-2 transition active:scale-95 shadow"
-              title="Performs atomic online backup via native SQLite backup API"
-            >
-              <Download className={`w-3.5 h-3.5 ${isBackingUp ? 'animate-bounce' : ''}`} />
-              <span>{isBackingUp ? 'Backing Up...' : 'SQLite Backup'}</span>
-            </button>
+            {isAdmin && (
+              <button
+                onClick={handleBackup}
+                disabled={isBackingUp}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-2 transition active:scale-95 shadow"
+                title="Performs atomic online backup via native SQLite backup API"
+              >
+                <Download className={`w-3.5 h-3.5 ${isBackingUp ? 'animate-bounce' : ''}`} />
+                <span>{isBackingUp ? 'Backing Up...' : 'SQLite Backup'}</span>
+              </button>
+            )}
             <button
               onClick={refreshAllData}
               className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-2 transition active:scale-95 shadow"

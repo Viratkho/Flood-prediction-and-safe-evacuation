@@ -16,6 +16,7 @@ import { SystemTestRunnerModal } from './components/SystemTestRunnerModal';
 import { DeviceAQrScannerModal } from './components/DeviceAQrScannerModal';
 import { DeviceBQrLoginModal } from './components/DeviceBQrLoginModal';
 import { WelcomePage } from './components/WelcomePage';
+import { MyLocationMap } from './components/MyLocationMap';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import {
   BASIN_CENTER,
@@ -75,6 +76,7 @@ import {
   Menu,
   Watch,
   Layers,
+  UserCheck,
   X,
 } from 'lucide-react';
 
@@ -87,7 +89,8 @@ type TabView =
   | 'person-monitoring'
   | 'person-intake'
   | 'incident-workspace'
-  | 'research-simulation';
+  | 'research-simulation'
+  | 'my-location-map';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabView>('welcome');
@@ -106,6 +109,31 @@ export default function App() {
     }
     return null;
   });
+
+  // Authenticated Citizen state (Intake Registration or QR Login)
+  const [citizenUser, setCitizenUser] = useState<RegisteredPerson | null>(() => {
+    try {
+      const saved = localStorage.getItem('floodguard_citizen_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.personId && parsed.name) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not read saved citizen session:', e);
+    }
+    return null;
+  });
+
+  const handleCitizenLogout = () => {
+    try {
+      localStorage.removeItem('floodguard_citizen_session');
+    } catch {}
+    setCitizenUser(null);
+    setActiveTab('welcome');
+    voiceNav.speak('Citizen session ended. Returned to public welcome view.');
+  };
 
   const handleAdminLogout = async () => {
     try {
@@ -730,9 +758,17 @@ export default function App() {
     setSelectedFocusLocation([newPerson.lat, newPerson.lng]);
     setFocusedPersonId(newPerson.personId);
 
-    // Navigate directly to Watch mode upon successful registration
-    setIsWatchGlanceMode(true);
+    // Establish authenticated citizen session
+    setCitizenUser(newPerson);
+    try {
+      localStorage.setItem('floodguard_citizen_session', JSON.stringify(newPerson));
+    } catch (e) {
+      console.warn('Could not persist citizen session:', e);
+    }
+
+    // Navigate to safe evacuation app upon registration
     setIsIntakeModalOpen(false);
+    setActiveTab('evacuation-app');
     try {
       window.history.pushState({ isWatchGlanceMode: true }, '', '#watch');
     } catch {
@@ -889,67 +925,63 @@ export default function App() {
             </div>
           </div>
 
-          {/* Active Global Shared Location Pill */}
-          <button
-            onClick={() => setActiveTab('flood-prediction')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'flood-prediction'
-                ? 'bg-[#ff7700] text-white shadow-lg'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Waves className="w-4 h-4 text-sky-400" />
-            <span>Hydro Prediction & DB</span>
-          </button>
+          {/* Operational Badges (Admin Only) */}
+          {adminUser && (
+            <>
+              {/* Dam Live Alert Capsule */}
+              <div className="hidden xl:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs font-mono">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    damTelemetry.status === 'CRITICAL'
+                      ? 'bg-red-500 animate-ping'
+                      : damTelemetry.status === 'WARNING'
+                      ? 'bg-[#ff7700]'
+                      : 'bg-emerald-500'
+                  }`}
+                ></span>
+                <span className="text-slate-400">DAM:</span>
+                <strong className="text-white">{damTelemetry.reservoirLevelM}m</strong>
+                <span className="text-slate-600">|</span>
+                <span className="text-slate-400">DISCHARGE:</span>
+                <strong className="text-sky-400">{(damTelemetry.spillwayReleaseCusecs / 1000).toFixed(1)}k cfs</strong>
+              </div>
 
-          <button
-            onClick={() => setActiveTab('weather-news')}
-            className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 transition"
-            title="Active Global Shared Location (Click to view Weather & News)"
-          >
-            <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="font-semibold text-slate-200">{sharedLocation.placeName}</span>
-            <span className="text-[10px] text-slate-500 font-mono">
-              ({sharedLocation.latitude.toFixed(2)}°, {sharedLocation.longitude.toFixed(2)}°)
-            </span>
-          </button>
+              {/* Emergency SOS & Critical Badges */}
+              {activeSosCount > 0 && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400 border border-red-500/50 text-xs font-mono font-bold animate-pulse">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>{activeSosCount} SOS ACTIVE</span>
+                </div>
+              )}
 
-          {/* Dam Live Alert Capsule */}
-          <div className="hidden xl:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs font-mono">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                damTelemetry.status === 'CRITICAL'
-                  ? 'bg-red-500 animate-ping'
-                  : damTelemetry.status === 'WARNING'
-                  ? 'bg-[#ff7700]'
-                  : 'bg-emerald-500'
-              }`}
-            ></span>
-            <span className="text-slate-400">DAM:</span>
-            <strong className="text-white">{damTelemetry.reservoirLevelM}m</strong>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-400">DISCHARGE:</span>
-            <strong className="text-sky-400">{(damTelemetry.spillwayReleaseCusecs / 1000).toFixed(1)}k cfs</strong>
-          </div>
-
-          {/* Emergency SOS & Critical Badges */}
-          {activeSosCount > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400 border border-red-500/50 text-xs font-mono font-bold animate-pulse">
-              <AlertCircle className="w-3.5 h-3.5" />
-              <span>{activeSosCount} SOS ACTIVE</span>
-            </div>
+              {criticalCount > 0 && (
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#ff7700]/20 text-[#ff7700] border border-[#ff7700]/50 text-xs font-mono font-bold">
+                  <Flame className="w-3.5 h-3.5" />
+                  <span>{criticalCount} CRITICAL (P0/P1)</span>
+                </div>
+              )}
+            </>
           )}
 
-          {criticalCount > 0 && (
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#ff7700]/20 text-[#ff7700] border border-[#ff7700]/50 text-xs font-mono font-bold">
-              <Flame className="w-3.5 h-3.5" />
-              <span>{criticalCount} CRITICAL (P0/P1)</span>
-            </div>
+          {/* Location Badge (Shown for Authenticated Citizen or Admin) */}
+          {(citizenUser || adminUser) && (
+            <button
+              onClick={() => setActiveTab('weather-news')}
+              className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 transition"
+              title="Active Global Shared Location (Click to view Weather & News)"
+            >
+              <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="font-semibold text-slate-200">{sharedLocation.placeName}</span>
+              <span className="text-[10px] text-slate-500 font-mono">
+                ({sharedLocation.latitude.toFixed(2)}°, {sharedLocation.longitude.toFixed(2)}°)
+              </span>
+            </button>
           )}
         </div>
 
-        {/* Primary View Switcher Navigation Tabs */}
+        {/* Primary View Switcher Navigation Tabs (Strictly Role-Based) */}
         <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 shadow-inner overflow-x-auto max-w-full">
+          {/* Welcome Tab is always available */}
           <button
             onClick={() => setActiveTab('welcome')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
@@ -962,119 +994,182 @@ export default function App() {
             <span>Welcome</span>
           </button>
 
-          <button
-            onClick={handleOpenCommandCenter}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'command-center'
-                ? 'bg-slate-800 text-white shadow'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Compass className="w-4 h-4 text-[#ff7700]" />
-            <span>Command Center</span>
-            {!adminUser && <Lock className="w-3 h-3 text-amber-400 ml-0.5" />}
-          </button>
+          {/* ADMINISTRATOR-ONLY TABS */}
+          {adminUser && (
+            <>
+              <button
+                onClick={handleOpenCommandCenter}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'command-center'
+                    ? 'bg-slate-800 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Compass className="w-4 h-4 text-[#ff7700]" />
+                <span>Command Center</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('person-monitoring')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'person-monitoring'
-                ? 'bg-slate-800 text-white shadow'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Users className="w-4 h-4 text-sky-400" />
-            <span>Person Monitoring ({people.length})</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('incident-workspace')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'incident-workspace'
+                    ? 'bg-slate-800 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <FileText className="w-4 h-4 text-amber-400" />
+                <span>Incidents ({incidents.filter((i) => i.status !== 'RESOLVED').length})</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('person-intake')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'person-intake'
-                ? 'bg-gradient-to-r from-[#ff7700] to-amber-500 text-white shadow'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Plus className="w-4 h-4 text-[#ff7700]" />
-            <span>Register Intake</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('person-monitoring')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'person-monitoring'
+                    ? 'bg-slate-800 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Users className="w-4 h-4 text-sky-400" />
+                <span>Person Monitoring ({people.length})</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('incident-workspace')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'incident-workspace'
-                ? 'bg-slate-800 text-white shadow'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <FileText className="w-4 h-4 text-amber-400" />
-            <span>Incidents ({incidents.filter((i) => i.status !== 'RESOLVED').length})</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('flood-prediction')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'flood-prediction'
+                    ? 'bg-[#ff7700] text-white shadow-lg'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Waves className="w-4 h-4 text-sky-400" />
+                <span>Hydro Prediction & DB</span>
+              </button>
+            </>
+          )}
 
-          <button
-            onClick={() => setActiveTab('evacuation-app')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'evacuation-app'
-                ? 'bg-[#ff7700] text-white shadow-lg'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Navigation className="w-4 h-4" />
-            <span>Evacuation App</span>
-          </button>
+          {/* CITIZEN OR ADMIN TABS (Revealed after Citizen Registration / QR Login or Admin Login) */}
+          {(citizenUser || adminUser) && (
+            <>
+              <button
+                onClick={() => setActiveTab('evacuation-app')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'evacuation-app'
+                    ? 'bg-[#ff7700] text-white shadow-lg'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Navigation className="w-4 h-4" />
+                <span>Evacuation Map</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('flood-prediction')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'flood-prediction'
-                ? 'bg-[#ff7700] text-white shadow-lg'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Waves className="w-4 h-4 text-sky-400" />
-            <span>Hydro Prediction & DB</span>
-          </button>
+              <button
+                onClick={() => setActiveTab('weather-news')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'weather-news'
+                    ? 'bg-sky-700/80 text-white shadow-lg border border-sky-500/50'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <CloudSun className="w-4 h-4 text-sky-400" />
+                <span>Weather & News</span>
+              </button>
 
-          <button
-            onClick={() => setActiveTab('weather-news')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'weather-news'
-                ? 'bg-sky-700/80 text-white shadow-lg border border-sky-500/50'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <CloudSun className="w-4 h-4 text-sky-400" />
-            <span>Weather & News</span>
-          </button>
+              {/* Citizen Hydro Prediction (when not admin) */}
+              {!adminUser && (
+                <button
+                  onClick={() => setActiveTab('flood-prediction')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                    activeTab === 'flood-prediction'
+                      ? 'bg-[#ff7700] text-white shadow-lg'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Waves className="w-4 h-4 text-sky-400" />
+                  <span>Hydro Prediction</span>
+                </button>
+              )}
 
-          <button
-            onClick={() => setActiveTab('research-simulation')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'research-simulation'
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <FlaskConical className="w-4 h-4 text-amber-400" />
-            <span>Research Mode</span>
-          </button>
+              {/* NEW SECTION: My Location Map (Private Single-Citizen Location View) */}
+              <button
+                onClick={() => setActiveTab('my-location-map')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'my-location-map'
+                    ? 'bg-cyan-600 text-white shadow-lg'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <MapPin className="w-4 h-4 text-cyan-400" />
+                <span>My Location Map</span>
+              </button>
+            </>
+          )}
+
+          {/* Research Simulation Mode (Admin Only) */}
+          {adminUser && (
+            <button
+              onClick={() => setActiveTab('research-simulation')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                activeTab === 'research-simulation'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <FlaskConical className="w-4 h-4 text-amber-400" />
+              <span>Research Mode</span>
+            </button>
+          )}
         </div>
 
-        {/* Global Action Modals: Security Badge, Mobile Alert, Offline Pack & AI Assistant */}
+        {/* Global Action Modals: Role-Based Controls & Modals */}
         <div className="flex items-center gap-2">
-          {/* Admin Authentication Status Badge */}
+          {/* 1. ADMINISTRATOR STATUS & CONTROLS */}
           {adminUser ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-950/70 border border-amber-500/40 text-[11px] font-mono text-amber-300 shadow-sm">
-              <Shield className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-bold">ADMIN: {adminUser.username}</span>
+            <>
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-950/70 border border-amber-500/40 text-[11px] font-mono text-amber-300 shadow-sm">
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <span className="font-bold">ADMIN: {adminUser.username}</span>
+                <button
+                  onClick={handleAdminLogout}
+                  className="ml-1 px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[10px] transition"
+                >
+                  Logout
+                </button>
+              </div>
+
+              {/* Emergency Mobile SMS Alert Gateway Trigger (Admin Only) */}
               <button
-                onClick={handleAdminLogout}
-                className="ml-1 px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[10px] transition"
+                onClick={() => handleOpenSmsModal(people[0])}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow transition active:scale-95"
+                title="Send Emergency SMS Alert to Mobile"
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>Mobile Alert</span>
+              </button>
+
+              {/* Live System Automated Testing Trigger (Admin Only) */}
+              <button
+                onClick={() => setIsTestRunnerOpen(true)}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-500/25 transition active:scale-95 animate-pulse"
+                title="Open Live Automated System Testing Console & Real-Time Diagnostics"
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>Live Testing</span>
+              </button>
+            </>
+          ) : citizenUser ? (
+            /* 2. CITIZEN STATUS & CONTROLS */
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-cyan-950/70 border border-cyan-500/40 text-[11px] font-mono text-cyan-300 shadow-sm">
+              <UserCheck className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="font-bold truncate max-w-[130px]">CITIZEN: {citizenUser.name}</span>
+              <button
+                onClick={handleCitizenLogout}
+                className="ml-1 px-1.5 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 text-[10px] transition"
               >
                 Logout
               </button>
             </div>
           ) : (
+            /* 3. PUBLIC VISITOR: ADMIN LOGIN ENTRY */
             <button
               onClick={() => setIsAdminModalOpen(true)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-mono text-amber-300 hover:text-amber-200 transition"
@@ -1105,6 +1200,7 @@ export default function App() {
             <QrCode className="w-3.5 h-3.5 text-sky-400" />
             <span>QR LOGIN</span>
           </button>
+
           {/* WAF Firewall Defense Status Trigger */}
           <button
             onClick={() => setIsFirewallModalOpen(true)}
@@ -1114,80 +1210,54 @@ export default function App() {
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
             <span className="font-bold hidden sm:inline">FIREWALL:</span>
             <span className="text-emerald-200">ACTIVE & DEFENDING</span>
-            <span className="hidden xl:inline text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
-              ZERO-FINGERPRINT
-            </span>
           </button>
 
-          {/* Live System Automated Testing Trigger */}
-          <button
-            onClick={() => setIsTestRunnerOpen(true)}
-            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-500/25 transition active:scale-95 animate-pulse"
-            title="Open Live Automated System Testing Console & Real-Time Diagnostics"
-          >
-            <Activity className="w-3.5 h-3.5" />
-            <span>Live Testing</span>
-            <span className="hidden lg:inline text-[9px] px-1.5 py-0.2 rounded bg-indigo-400/30 font-mono font-bold">
-              27 TESTS
-            </span>
-          </button>
-
-          {/* Emergency Mobile SMS Alert Gateway Trigger */}
-          <button
-            onClick={() => handleOpenSmsModal(people[0])}
-            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow transition active:scale-95"
-            title="Send Emergency SMS Alert to Mobile"
-          >
-            <Smartphone className="w-3.5 h-3.5" />
-            <span>Mobile Alert</span>
-          </button>
-
-          {/* Offline Mode Indicator Badge */}
-          {isOfflineMode && (
-            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-mono font-bold animate-pulse">
-              <WifiOff className="w-3.5 h-3.5" />
-              OFFLINE MODE
-            </span>
+          {/* Offline Map Pack (Authenticated Citizen or Admin) */}
+          {(citizenUser || adminUser) && (
+            <button
+              onClick={() => setIsOfflineManagerOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 shadow transition"
+              title="Download & Manage Offline Map Packages"
+            >
+              <Download className="w-3.5 h-3.5 text-[#38bdf8]" />
+              <span className="hidden md:inline">Offline Map Pack</span>
+            </button>
           )}
 
-          <button
-            onClick={() => setIsOfflineManagerOpen(true)}
-            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 shadow transition"
-            title="Download & Manage Offline Map Packages"
-          >
-            <Download className="w-3.5 h-3.5 text-[#38bdf8]" />
-            <span className="hidden md:inline">Offline Map Pack</span>
-          </button>
+          {/* Smartwatch / Ultra-Small Display Mode Switcher (Authenticated Citizen or Admin) */}
+          {(citizenUser || adminUser) && (
+            <button
+              onClick={() => setIsWatchGlanceMode(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-sky-300 text-xs font-semibold flex items-center gap-1.5 shadow transition"
+              title="Preview Smartwatch / Wearable Ultra-Compact View (160–320px)"
+            >
+              <Watch className="w-3.5 h-3.5 text-sky-400" />
+              <span className="hidden xl:inline">Watch View</span>
+            </button>
+          )}
 
-          {/* Smartwatch / Ultra-Small Display Mode Switcher */}
-          <button
-            onClick={() => setIsWatchGlanceMode(true)}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-sky-300 text-xs font-semibold flex items-center gap-1.5 shadow transition"
-            title="Preview Smartwatch / Wearable Ultra-Compact View (160–320px)"
-          >
-            <Watch className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden xl:inline">Watch View</span>
-          </button>
-
-          <button
-            onClick={() => setIsAiAssistantOpen(true)}
-            className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-[#ff7700] to-amber-500 hover:from-[#ff8811] hover:to-amber-400 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-[#ff7700]/20 transition active:scale-95"
-            title="Open Interactive Aegis AI Assistant"
-          >
-            <Bot className="w-4 h-4 text-white" />
-            <span>Aegis AI</span>
-          </button>
+          {/* Aegis AI Assistant (Authenticated Citizen or Admin) */}
+          {(citizenUser || adminUser) && (
+            <button
+              onClick={() => setIsAiAssistantOpen(true)}
+              className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-[#ff7700] to-amber-500 hover:from-[#ff8811] hover:to-amber-400 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-[#ff7700]/20 transition active:scale-95"
+              title="Open Interactive Aegis AI Assistant"
+            >
+              <Bot className="w-4 h-4 text-white" />
+              <span>Aegis AI</span>
+            </button>
+          )}
         </div>
         </div>
       </header>
 
-      {/* Mobile Drawer Menu Overlay (When Hamburger Opened on < 768px) */}
+      {/* Mobile Drawer Menu Overlay (Strictly Role-Based) */}
       {isMobileMenuOpen && (
         <div className="md:hidden fixed inset-x-0 top-[52px] bottom-[56px] z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 p-4 overflow-y-auto space-y-4 animate-in slide-in-from-top-2">
           {/* Section: Primary Views */}
           <div className="space-y-1.5">
             <div className="text-[10px] font-mono uppercase text-slate-400 tracking-wider">
-              Primary Dashboards & Views
+              {adminUser ? 'Administrator Dashboards' : citizenUser ? 'Citizen Navigation & Services' : 'FloodGuard Information'}
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1203,129 +1273,176 @@ export default function App() {
                 }`}
               >
                 <LifeBuoy className="w-4 h-4 text-emerald-400" />
-                <span>Welcome Page</span>
+                <span>Welcome</span>
               </button>
 
-              <button
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  handleOpenCommandCenter();
-                }}
-                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
-                  activeTab === 'command-center'
-                    ? 'bg-slate-800 text-white border-white'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`}
-              >
-                <Compass className="w-4 h-4 text-[#ff7700]" />
-                <span>Command Center</span>
-                {!adminUser && <Lock className="w-3.5 h-3.5 text-amber-400 ml-auto" />}
-              </button>
+              {/* ADMINISTRATOR-ONLY TABS */}
+              {adminUser && (
+                <>
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      handleOpenCommandCenter();
+                    }}
+                    className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                      activeTab === 'command-center'
+                        ? 'bg-slate-800 text-white border-white'
+                        : 'bg-slate-900 text-slate-300 border-slate-800'
+                    }`}
+                  >
+                    <Compass className="w-4 h-4 text-[#ff7700]" />
+                    <span>Command Center</span>
+                  </button>
 
-              <button
-                onClick={() => {
-                  setActiveTab('evacuation-app');
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
-                  activeTab === 'evacuation-app'
-                    ? 'bg-[#ff7700] text-white border-white'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`}
-              >
-                <Navigation className="w-4 h-4" />
-                <span>Evacuation App</span>
-              </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('incident-workspace');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                      activeTab === 'incident-workspace'
+                        ? 'bg-slate-800 text-white border-white'
+                        : 'bg-slate-900 text-slate-300 border-slate-800'
+                    }`}
+                  >
+                    <FileText className="w-4 h-4 text-amber-400" />
+                    <span>Incidents ({incidents.filter((i) => i.status !== 'RESOLVED').length})</span>
+                  </button>
 
-              <button
-                onClick={() => {
-                  setActiveTab('weather-news');
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
-                  activeTab === 'weather-news'
-                    ? 'bg-sky-700 text-white border-white'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`}
-              >
-                <CloudSun className="w-4 h-4 text-sky-400" />
-                <span>Weather & News</span>
-              </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('person-monitoring');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                      activeTab === 'person-monitoring'
+                        ? 'bg-slate-800 text-white border-white'
+                        : 'bg-slate-900 text-slate-300 border-slate-800'
+                    }`}
+                  >
+                    <Users className="w-4 h-4 text-sky-400" />
+                    <span>Monitoring ({people.length})</span>
+                  </button>
 
-              <button
-                onClick={() => {
-                  setActiveTab('person-monitoring');
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
-                  activeTab === 'person-monitoring'
-                    ? 'bg-slate-800 text-white border-white'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`}
-              >
-                <Users className="w-4 h-4 text-sky-400" />
-                <span>Monitoring ({people.length})</span>
-              </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('research-simulation');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                      activeTab === 'research-simulation'
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
+                        : 'bg-slate-900 text-slate-300 border-slate-800'
+                    }`}
+                  >
+                    <FlaskConical className="w-4 h-4 text-amber-400" />
+                    <span>Research Mode</span>
+                  </button>
+                </>
+              )}
 
-              <button
-                onClick={() => {
-                  setActiveTab('person-intake');
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
-                  activeTab === 'person-intake'
-                    ? 'bg-[#ff7700] text-white border-white'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`}
-              >
-                <Plus className="w-4 h-4 text-[#ff7700]" />
-                <span>Register Intake</span>
-              </button>
+              {/* CITIZEN OR ADMIN TABS */}
+              {(citizenUser || adminUser) && (
+                <>
+                  <button
+                    onClick={() => {
+                      setActiveTab('evacuation-app');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                      activeTab === 'evacuation-app'
+                        ? 'bg-[#ff7700] text-white border-white'
+                        : 'bg-slate-900 text-slate-300 border-slate-800'
+                    }`}
+                  >
+                    <Navigation className="w-4 h-4" />
+                    <span>Evacuation Map</span>
+                  </button>
 
-              <button
-                onClick={() => {
-                  setActiveTab('flood-prediction');
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
-                  activeTab === 'flood-prediction'
-                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/50'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`}
-              >
-                <Waves className="w-4 h-4 text-sky-400" />
-                <span>Prediction Studio</span>
-              </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('weather-news');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                      activeTab === 'weather-news'
+                        ? 'bg-sky-700 text-white border-white'
+                        : 'bg-slate-900 text-slate-300 border-slate-800'
+                    }`}
+                  >
+                    <CloudSun className="w-4 h-4 text-sky-400" />
+                    <span>Weather & News</span>
+                  </button>
 
-              <button
-                onClick={() => {
-                  setActiveTab('incident-workspace');
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
-                  activeTab === 'incident-workspace'
-                    ? 'bg-slate-800 text-white border-white'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`}
-              >
-                <FileText className="w-4 h-4 text-amber-400" />
-                <span>Incidents</span>
-              </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('flood-prediction');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                      activeTab === 'flood-prediction'
+                        ? 'bg-sky-500/20 text-sky-300 border-sky-500/50'
+                        : 'bg-slate-900 text-slate-300 border-slate-800'
+                    }`}
+                  >
+                    <Waves className="w-4 h-4 text-sky-400" />
+                    <span>{adminUser ? 'Hydro Prediction & DB' : 'Hydro Prediction'}</span>
+                  </button>
 
-              <button
-                onClick={() => {
-                  setActiveTab('research-simulation');
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`col-span-2 p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
-                  activeTab === 'research-simulation'
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`}
-              >
-                <FlaskConical className="w-4 h-4 text-amber-400" />
-                <span>Research Mode & Simulation Scenarios</span>
-              </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('my-location-map');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 ${
+                      activeTab === 'my-location-map'
+                        ? 'bg-cyan-600 text-white border-white'
+                        : 'bg-slate-900 text-slate-300 border-slate-800'
+                    }`}
+                  >
+                    <MapPin className="w-4 h-4 text-cyan-400" />
+                    <span>My Location Map</span>
+                  </button>
+                </>
+              )}
+
+              {/* PUBLIC VISITOR ACTIONS */}
+              {!citizenUser && !adminUser && (
+                <>
+                  <button
+                    onClick={() => {
+                      setActiveTab('person-intake');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 bg-gradient-to-r from-[#ff7700] to-amber-500 text-white border-transparent"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Register (Intake)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setIsDeviceBQrModalOpen(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 bg-slate-900 text-sky-300 border-slate-800"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    <span>Log In with QR</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setIsAdminModalOpen(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="col-span-2 p-2.5 rounded-xl border text-left font-bold flex items-center gap-2 bg-amber-950/60 text-amber-300 border-amber-500/40"
+                  >
+                    <Lock className="w-4 h-4 text-amber-400" />
+                    <span>Administrator Login</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -1358,38 +1475,31 @@ export default function App() {
                 <span>QR Login (Device B)</span>
               </button>
 
-              <button
-                onClick={() => {
-                  handleOpenSmsModal(people[0]);
-                  setIsMobileMenuOpen(false);
-                }}
-                className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold flex items-center gap-2 shadow"
-              >
-                <Smartphone className="w-4 h-4" />
-                <span>Mobile SMS Alert</span>
-              </button>
+              {adminUser && (
+                <>
+                  <button
+                    onClick={() => {
+                      handleOpenSmsModal(people[0]);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold flex items-center gap-2 shadow"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>Mobile SMS Alert</span>
+                  </button>
 
-              <button
-                onClick={() => {
-                  setIsAiAssistantOpen(true);
-                  setIsMobileMenuOpen(false);
-                }}
-                className="p-2.5 rounded-xl bg-gradient-to-r from-[#ff7700] to-amber-500 text-white font-bold flex items-center gap-2 shadow"
-              >
-                <Bot className="w-4 h-4" />
-                <span>Aegis AI Advisor</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setIsTestRunnerOpen(true);
-                  setIsMobileMenuOpen(false);
-                }}
-                className="p-2.5 rounded-xl bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-bold flex items-center gap-2"
-              >
-                <Activity className="w-4 h-4" />
-                <span>Live Testing (27)</span>
-              </button>
+                  <button
+                    onClick={() => {
+                      setIsTestRunnerOpen(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="p-2.5 rounded-xl bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-bold flex items-center gap-2"
+                  >
+                    <Activity className="w-4 h-4" />
+                    <span>Live Testing (27)</span>
+                  </button>
+                </>
+              )}
 
               <button
                 onClick={() => {
@@ -1402,23 +1512,57 @@ export default function App() {
                 <span>Firewall WAF</span>
               </button>
 
-              <button
-                onClick={() => {
-                  setIsOfflineManagerOpen(true);
-                  setIsMobileMenuOpen(false);
-                }}
-                className="col-span-2 p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 font-bold flex items-center justify-between"
-              >
-                <span className="flex items-center gap-2">
-                  <Download className="w-4 h-4 text-sky-400" />
-                  <span>Offline Map Packages</span>
-                </span>
-                <span className="text-[10px] font-mono text-slate-500">
-                  {isOfflineMode ? 'OFFLINE' : 'ONLINE'}
-                </span>
-              </button>
+              {(citizenUser || adminUser) && (
+                <>
+                  <button
+                    onClick={() => {
+                      setIsAiAssistantOpen(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="p-2.5 rounded-xl bg-gradient-to-r from-[#ff7700] to-amber-500 text-white font-bold flex items-center gap-2 shadow"
+                  >
+                    <Bot className="w-4 h-4" />
+                    <span>Aegis AI</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setIsOfflineManagerOpen(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="col-span-2 p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 font-bold flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Download className="w-4 h-4 text-sky-400" />
+                      <span>Offline Map Packages</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500">
+                      {isOfflineMode ? 'OFFLINE' : 'ONLINE'}
+                    </span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
+
+          {/* User Status / Logout in Drawer */}
+          {(citizenUser || adminUser) && (
+            <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+              <span className="text-xs font-mono text-slate-300">
+                {adminUser ? `Admin: ${adminUser.username}` : `Citizen: ${citizenUser?.name}`}
+              </span>
+              <button
+                onClick={() => {
+                  if (adminUser) handleAdminLogout();
+                  else handleCitizenLogout();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-300 border border-red-500/40 text-xs font-bold transition"
+              >
+                Logout
+              </button>
+            </div>
+          )}
 
           {/* Smartwatch Switcher in Drawer */}
           <div className="pt-2 border-t border-slate-800">
@@ -1478,22 +1622,55 @@ export default function App() {
           <WelcomePage
             onGetStarted={() => setActiveTab('person-intake')}
             onUserLogin={() => {
-              const registered = people.find((p) => p.isUserRegistered);
-              if (registered) {
-                setSelectedAlertPerson(registered);
-                setIsWatchGlanceMode(true);
+              if (citizenUser) {
+                setActiveTab('evacuation-app');
               } else {
                 setIsDeviceBQrModalOpen(true);
               }
             }}
             onAdminLogin={() => setIsAdminModalOpen(true)}
             onOpenFloodPrediction={() => setActiveTab('flood-prediction')}
+            onOpenEvacuation={() => setActiveTab('evacuation-app')}
+            onOpenMyLocation={() => setActiveTab('my-location-map')}
+            isAdmin={Boolean(adminUser)}
+            isCitizen={Boolean(citizenUser)}
+            currentUser={citizenUser}
+            onLogoutCitizen={handleCitizenLogout}
+            onLogoutAdmin={handleAdminLogout}
             registeredCount={people.length}
             activeSensorsCount={sensors.length}
           />
         )}
 
-        {activeTab === 'command-center' && (
+        {/* ADMINISTRATOR ACCESS GUARD: Redirect or lock administrative tabs */}
+        {(activeTab === 'command-center' || activeTab === 'incident-workspace' || activeTab === 'person-monitoring' || activeTab === 'research-simulation') && !adminUser && (
+          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-slate-950 text-white space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-xl">
+              <Shield className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-black tracking-tight">Administrator Authorization Required</h2>
+            <p className="text-sm text-slate-400 max-w-md">
+              Tactical Command Center modules, live multi-victim monitoring, incident dispatch, and dam control telemetry are restricted to verified rescue administrators.
+            </p>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => setIsAdminModalOpen(true)}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#ff7700] to-amber-500 text-white font-bold text-xs shadow-lg transition active:scale-95 flex items-center gap-2"
+              >
+                <Lock className="w-4 h-4" />
+                <span>Log In as Administrator</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('welcome')}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs transition"
+              >
+                Return to Welcome
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'command-center' && adminUser && (
           <RescueCommandCenter
             sensors={sensors}
             segments={segments}
@@ -1512,7 +1689,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'person-monitoring' && (
+        {activeTab === 'person-monitoring' && adminUser && (
           <PersonMonitoringPanel
             people={people}
             reliefCentres={reliefCentres}
@@ -1545,7 +1722,7 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'incident-workspace' && (
+        {activeTab === 'incident-workspace' && adminUser && (
           <IncidentWorkspace
             incidents={incidents}
             onAcknowledge={handleAcknowledgeIncident}
@@ -1586,10 +1763,19 @@ export default function App() {
         )}
 
         {activeTab === 'flood-prediction' && (
-          <FloodPredictionStudio />
+          <FloodPredictionStudio isAdmin={Boolean(adminUser)} />
         )}
 
-        {activeTab === 'research-simulation' && (
+        {activeTab === 'my-location-map' && (
+          <MyLocationMap
+            currentUser={citizenUser || (people.length > 0 ? people[0] : null)}
+            onUpdateLocation={(lat, lng) => {
+              setUserLocation([lat, lng]);
+            }}
+          />
+        )}
+
+        {activeTab === 'research-simulation' && adminUser && (
           <ResearchSimulationMode
             scenarios={INITIAL_RESEARCH_SCENARIOS}
             experimentLogs={experimentLogs}
@@ -1602,63 +1788,174 @@ export default function App() {
         )}
       </main>
 
-      {/* Fixed Bottom Navigation Dock for Thumb Usability (Mobile Phones < 768px, hidden in Watch Mode) */}
+      {/* Fixed Bottom Navigation Dock for Thumb Usability (Strictly Role-Based) */}
       {!isWatchGlanceMode && (
         <nav className="md:hidden z-30 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 px-2 py-1.5 flex items-center justify-around text-slate-400 shrink-0 safe-area-inset-bottom">
-          <button
-            onClick={() => {
-              setActiveTab('command-center');
-              setIsMobileMenuOpen(false);
-            }}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
-              activeTab === 'command-center' ? 'text-[#ff7700] font-bold' : 'hover:text-slate-200'
-            }`}
-          >
-            <Compass className="w-4 h-4" />
-            <span className="text-[10px]">Command</span>
-          </button>
+          {adminUser ? (
+            /* ADMIN MOBILE DOCK */
+            <>
+              <button
+                onClick={() => {
+                  setActiveTab('command-center');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+                  activeTab === 'command-center' ? 'text-[#ff7700] font-bold' : 'hover:text-slate-200'
+                }`}
+              >
+                <Compass className="w-4 h-4" />
+                <span className="text-[10px]">Command</span>
+              </button>
 
-          <button
-            onClick={() => {
-              setActiveTab('evacuation-app');
-              setIsMobileMenuOpen(false);
-            }}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
-              activeTab === 'evacuation-app' ? 'text-[#ff7700] font-bold' : 'hover:text-slate-200'
-            }`}
-          >
-            <Navigation className="w-4 h-4" />
-            <span className="text-[10px]">Evac</span>
-          </button>
+              <button
+                onClick={() => {
+                  setActiveTab('incident-workspace');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+                  activeTab === 'incident-workspace' ? 'text-amber-400 font-bold' : 'hover:text-slate-200'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                <span className="text-[10px]">Incidents</span>
+              </button>
 
-          <button
-            onClick={() => {
-              setActiveTab('weather-news');
-              setIsMobileMenuOpen(false);
-            }}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
-              activeTab === 'weather-news' ? 'text-sky-400 font-bold' : 'hover:text-slate-200'
-            }`}
-          >
-            <CloudSun className="w-4 h-4" />
-            <span className="text-[10px]">Weather</span>
-          </button>
+              <button
+                onClick={() => {
+                  setActiveTab('person-monitoring');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition relative ${
+                  activeTab === 'person-monitoring' ? 'text-sky-400 font-bold' : 'hover:text-slate-200'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span className="text-[10px]">People</span>
+                {criticalCount > 0 && (
+                  <span className="absolute top-0 right-1 w-2 h-2 rounded-full bg-[#ff7700]"></span>
+                )}
+              </button>
 
-          <button
-            onClick={() => {
-              setActiveTab('person-monitoring');
-              setIsMobileMenuOpen(false);
-            }}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition relative ${
-              activeTab === 'person-monitoring' ? 'text-sky-400 font-bold' : 'hover:text-slate-200'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span className="text-[10px]">People</span>
-            {criticalCount > 0 && (
-              <span className="absolute top-0 right-1 w-2 h-2 rounded-full bg-[#ff7700]"></span>
-            )}
-          </button>
+              <button
+                onClick={() => {
+                  setActiveTab('evacuation-app');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+                  activeTab === 'evacuation-app' ? 'text-[#ff7700] font-bold' : 'hover:text-slate-200'
+                }`}
+              >
+                <Navigation className="w-4 h-4" />
+                <span className="text-[10px]">Evac</span>
+              </button>
+            </>
+          ) : citizenUser ? (
+            /* CITIZEN MOBILE DOCK */
+            <>
+              <button
+                onClick={() => {
+                  setActiveTab('welcome');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+                  activeTab === 'welcome' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
+                }`}
+              >
+                <LifeBuoy className="w-4 h-4" />
+                <span className="text-[10px]">Welcome</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('evacuation-app');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+                  activeTab === 'evacuation-app' ? 'text-[#ff7700] font-bold' : 'hover:text-slate-200'
+                }`}
+              >
+                <Navigation className="w-4 h-4" />
+                <span className="text-[10px]">Evac</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('weather-news');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+                  activeTab === 'weather-news' ? 'text-sky-400 font-bold' : 'hover:text-slate-200'
+                }`}
+              >
+                <CloudSun className="w-4 h-4" />
+                <span className="text-[10px]">Weather</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('my-location-map');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+                  activeTab === 'my-location-map' ? 'text-cyan-400 font-bold' : 'hover:text-slate-200'
+                }`}
+              >
+                <MapPin className="w-4 h-4" />
+                <span className="text-[10px]">My Loc</span>
+              </button>
+            </>
+          ) : (
+            /* PUBLIC UNREGISTERED MOBILE DOCK */
+            <>
+              <button
+                onClick={() => {
+                  setActiveTab('welcome');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+                  activeTab === 'welcome' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
+                }`}
+              >
+                <LifeBuoy className="w-4 h-4" />
+                <span className="text-[10px]">Welcome</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('person-intake');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+                  activeTab === 'person-intake' ? 'text-[#ff7700] font-bold' : 'hover:text-slate-200'
+                }`}
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-[10px]">Register</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsDeviceBQrModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition hover:text-slate-200"
+              >
+                <QrCode className="w-4 h-4 text-sky-400" />
+                <span className="text-[10px]">QR Login</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsAdminModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition hover:text-slate-200"
+              >
+                <Lock className="w-4 h-4 text-amber-400" />
+                <span className="text-[10px]">Admin</span>
+              </button>
+            </>
+          )}
 
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
