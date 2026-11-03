@@ -66,13 +66,13 @@ def get_current_admin_session(request: Request) -> Optional[Dict[str, Any]]:
     return None
 
 
-def check_admin_rbac(request: Request) -> Optional[Dict[str, Any]]:
+def check_admin_rbac(request: Request, strict: bool = False) -> Optional[Dict[str, Any]]:
     """
     Enforces Role-Based Access Control for Command Center administrative routes.
     1. Blocks callers with X-User-Role: CITIZEN (HTTP 403 Forbidden).
     2. If an admin token is provided, validates it in SQLite.
        If invalid or expired, raises HTTP 401 Unauthorized.
-    3. If caller explicitly requires admin or provides invalid token, raises HTTP 401 Unauthorized.
+    3. If strict=True or caller sets X-Require-Admin: 1, raises HTTP 401 Unauthorized when unauthenticated.
     """
     user_role = (request.headers.get("X-User-Role") or "").upper()
     if user_role == "CITIZEN":
@@ -91,7 +91,7 @@ def check_admin_rbac(request: Request) -> Optional[Dict[str, Any]]:
             )
         return session
 
-    if request.headers.get("X-Require-Admin") == "1":
+    if strict or request.headers.get("X-Require-Admin") == "1":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized: Administrator authentication required to perform this action.",

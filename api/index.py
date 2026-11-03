@@ -34,7 +34,8 @@ except Exception as e:
 API_PREFIXES = (
     "/auth", "/health", "/dam", "/people", "/incidents", "/alerts",
     "/security", "/research", "/weather", "/ai", "/prediction",
-    "/users", "/locations", "/history", "/system", "/simulation", "/news"
+    "/users", "/locations", "/history", "/system", "/simulation", "/news",
+    "/family", "/admin"
 )
 
 @app.middleware("http")

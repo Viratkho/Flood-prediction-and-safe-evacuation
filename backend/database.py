@@ -408,6 +408,44 @@ def seed_initial_data(conn: sqlite3.Connection, force: bool = False):
             ("FloodGuard Chief Hydrologist", "admin@floodguard.local", "+919840100000", pwd_hash, salt, now_ts, now_ts)
         )
 
+    # 8. Seed Default Family Connections (P-101 and P-102 connected, P-107 invited)
+    cursor.execute("SELECT COUNT(*) AS cnt FROM family_connections;")
+    if cursor.fetchone()["cnt"] == 0:
+        now_ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        # Connection 1: P-101 <-> P-102 (ACCEPTED)
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO family_connections (requester_id, invited_id, relationship, status, created_at, accepted_at, updated_at)
+            VALUES ('P-101', 'P-102', 'Spouse', 'ACCEPTED', ?, ?, ?)
+            """,
+            (now_ts, now_ts, now_ts)
+        )
+        conn_1_id = cursor.lastrowid or 1
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO family_location_permissions (connection_id, user_id, share_location, updated_at)
+            VALUES (?, 'P-101', 1, ?), (?, 'P-102', 1, ?)
+            """,
+            (conn_1_id, now_ts, conn_1_id, now_ts)
+        )
+
+        # Connection 2: P-107 -> P-101 (PENDING)
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO family_connections (requester_id, invited_id, relationship, status, created_at, accepted_at, updated_at)
+            VALUES ('P-107', 'P-101', 'Sister & Infant', 'PENDING', ?, NULL, ?)
+            """,
+            (now_ts, now_ts)
+        )
+        conn_2_id = cursor.lastrowid or 2
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO family_location_permissions (connection_id, user_id, share_location, updated_at)
+            VALUES (?, 'P-107', 1, ?)
+            """,
+            (conn_2_id, now_ts)
+        )
+
 
 
 def init_db():
@@ -781,6 +819,79 @@ def init_db():
             """
         )
 
+        # 19. Experiment Logs Table (Research Benchmark Simulation)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS experiment_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                scenario_id TEXT NOT NULL,
+                scenario_name TEXT NOT NULL,
+                person_id TEXT NOT NULL,
+                person_name TEXT NOT NULL,
+                input_condition TEXT NOT NULL,
+                previous_priority TEXT NOT NULL,
+                new_priority TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                outcome TEXT NOT NULL
+            );
+            """
+        )
+
+        # 20. Family Connections Table (Module 2: Family Safety)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS family_connections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                requester_id TEXT NOT NULL,
+                invited_id TEXT NOT NULL,
+                relationship TEXT DEFAULT 'Family Member',
+                status TEXT NOT NULL DEFAULT 'PENDING',
+                created_at TEXT NOT NULL,
+                accepted_at TEXT,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (requester_id) REFERENCES people(person_id) ON DELETE CASCADE,
+                FOREIGN KEY (invited_id) REFERENCES people(person_id) ON DELETE CASCADE,
+                UNIQUE(requester_id, invited_id)
+            );
+            """
+        )
+
+        # 21. Family Location Sharing Permissions Table
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS family_location_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                connection_id INTEGER NOT NULL,
+                user_id TEXT NOT NULL,
+                share_location INTEGER NOT NULL DEFAULT 1,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (connection_id) REFERENCES family_connections(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES people(person_id) ON DELETE CASCADE,
+                UNIQUE(connection_id, user_id)
+            );
+            """
+        )
+
+        # 22. Family SOS Emergency Alerts Table
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS family_sos_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                sender_name TEXT NOT NULL,
+                lat REAL NOT NULL,
+                lng REAL NOT NULL,
+                accuracy_m REAL,
+                location_name TEXT,
+                alert_message TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                FOREIGN KEY (user_id) REFERENCES people(person_id) ON DELETE CASCADE
+            );
+            """
+        )
+
         # Indexes for fast lookup & data integrity
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token);")
@@ -797,6 +908,12 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_people_priority ON people(rescue_priority);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_incidents_priority ON incidents(priority);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fam_conn_req ON family_connections(requester_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fam_conn_inv ON family_connections(invited_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fam_conn_stat ON family_connections(status);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fam_perm_conn ON family_location_permissions(connection_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fam_sos_user ON family_sos_alerts(user_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_exp_logs_scen ON experiment_logs(scenario_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username);")
 
         seed_initial_data(conn, force=False)

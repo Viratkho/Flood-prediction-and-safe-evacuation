@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import {
   MapPin,
@@ -13,22 +13,32 @@ import {
   Lock,
   WifiOff,
   Crosshair,
+  Heart,
+  Users,
 } from 'lucide-react';
 import { RegisteredPerson } from '../types/floodguard';
+import { FamilyMemberLocation } from '../types/family';
+import { FamilySafetyDrawer } from './FamilySafetyDrawer';
+import { PopulationRadiusTool } from './PopulationRadiusTool';
 
 interface MyLocationMapProps {
   currentUser: RegisteredPerson | null;
+  isAdmin?: boolean;
+  adminToken?: string;
   onUpdateLocation?: (lat: number, lng: number, placeName?: string) => void;
 }
 
 export const MyLocationMap: React.FC<MyLocationMapProps> = ({
   currentUser,
+  isAdmin = false,
+  adminToken,
   onUpdateLocation,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const circleRef = useRef<L.Circle | null>(null);
+  const familyLayerGroupRef = useRef<L.LayerGroup | null>(null);
 
   // Default coordinate: Avadi Basin fallback or citizen's registered coordinates
   const initialLat = currentUser?.lat ?? 13.1143;
@@ -49,6 +59,45 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
   const [isSyncingWithBackend, setIsSyncingWithBackend] = useState<boolean>(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
+  // Module 1 & Module 2 UI States
+  const [isFamilyDrawerOpen, setIsFamilyDrawerOpen] = useState<boolean>(false);
+  const [isPopulationToolOpen, setIsPopulationToolOpen] = useState<boolean>(false);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMemberLocation[]>([]);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
+
+  // Fetch Connected Family Members & Requests
+  const fetchFamilyData = useCallback(async () => {
+    if (!currentUser?.personId) return;
+    try {
+      const [membersRes, requestsRes] = await Promise.all([
+        fetch('/api/family/members', {
+          headers: { 'X-Citizen-Id': currentUser.personId },
+        }),
+        fetch('/api/family/requests', {
+          headers: { 'X-Citizen-Id': currentUser.personId },
+        }),
+      ]);
+
+      if (membersRes.ok) {
+        const membersData = await membersRes.json();
+        setFamilyMembers(membersData);
+      }
+      if (requestsRes.ok) {
+        const reqData = await requestsRes.json();
+        setPendingRequestsCount(reqData.incoming?.length || 0);
+      }
+    } catch (e) {
+      console.warn('Failed to load family members for map:', e);
+    }
+  }, [currentUser]);
+
+  // Initial fetch and 15s poll for family coordinates
+  useEffect(() => {
+    fetchFamilyData();
+    const interval = setInterval(fetchFamilyData, 15000);
+    return () => clearInterval(interval);
+  }, [fetchFamilyData]);
+
   // Initialize isolated Leaflet Map
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
@@ -61,18 +110,21 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // Completely free OpenStreetMap tiles
+    // Free OpenStreetMap tiles
     const tileUrl =
       mapStyle === 'streets'
         ? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
         : 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
 
-    const tileLayer = L.tileLayer(tileUrl, {
+    L.tileLayer(tileUrl, {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(map);
 
     mapInstanceRef.current = map;
+
+    // LayerGroup for family members
+    familyLayerGroupRef.current = L.layerGroup().addTo(map);
 
     // Create distinctive personal location icon (Pulsing Cyan/Orange Beacon)
     const personalIcon = L.divIcon({
@@ -94,7 +146,7 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
     marker.bindPopup(`
       <div class="p-2 text-slate-900 font-sans">
         <div class="font-bold text-xs flex items-center gap-1 text-[#ff7700]">
-          <span>📍 My Verified Location</span>
+          <span>📍 My Verified Location (ME)</span>
         </div>
         <div class="text-[11px] font-semibold text-slate-800 mt-1">${currentUser?.name || 'Citizen'}</div>
         <div class="text-[10px] text-slate-600">${locationName}</div>
@@ -143,6 +195,139 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
     }).addTo(mapInstanceRef.current);
   }, [mapStyle]);
 
+  // Render Connected Family Members on the SAME MAP instance with Spiderfying
+  useEffect(() => {
+    if (!mapInstanceRef.current || !familyLayerGroupRef.current) return;
+    familyLayerGroupRef.current.clearLayers();
+
+    // Collect all coordinates to detect overlaps with "ME" or other members
+    const allPoints: Array<{ id: string; lat: number; lng: number; isFamily: boolean; data?: FamilyMemberLocation }> = [
+      { id: 'ME', lat: coords[0], lng: coords[1], isFamily: false },
+    ];
+
+    familyMembers.forEach((member) => {
+      if (member.lat && member.lng) {
+        allPoints.push({
+          id: member.personId,
+          lat: member.lat,
+          lng: member.lng,
+          isFamily: true,
+          data: member,
+        });
+      }
+    });
+
+    // Detect clustering around identical coordinates (threshold: ~10 meters)
+    const clusterBuckets: { [key: string]: typeof allPoints } = {};
+    allPoints.forEach((pt) => {
+      const bucketKey = `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`;
+      if (!clusterBuckets[bucketKey]) clusterBuckets[bucketKey] = [];
+      clusterBuckets[bucketKey].push(pt);
+    });
+
+    // Render family member markers with angular offset if overlapping
+    Object.values(clusterBuckets).forEach((group) => {
+      const count = group.length;
+      group.forEach((pt, index) => {
+        if (!pt.isFamily || !pt.data) return;
+        const member = pt.data;
+
+        let displayLat = pt.lat;
+        let displayLng = pt.lng;
+
+        // Apply slight angular spiderfying offset if overlapping
+        if (count > 1) {
+          const angle = (2 * Math.PI * index) / count;
+          const offsetM = 20; // 20m spiderfy offset
+          const degOffsetLat = offsetM / 111320;
+          const degOffsetLng = offsetM / (111320 * Math.cos((pt.lat * Math.PI) / 180));
+          displayLat += degOffsetLat * Math.sin(angle);
+          displayLng += degOffsetLng * Math.cos(angle);
+        }
+
+        const isSos = member.sosActive;
+        const isFlooded = member.isInHighRiskFlood;
+        const isStale = member.isStale;
+
+        // Distinct Emerald / Teal Marker Icon with Initial and Status Halo
+        const familyIcon = L.divIcon({
+          className: 'custom-family-marker',
+          html: `
+            <div class="relative flex items-center justify-center cursor-pointer">
+              ${isSos ? '<div class="absolute w-10 h-10 rounded-full bg-red-500/50 animate-ping"></div>' : ''}
+              ${isFlooded ? '<div class="absolute w-8 h-8 rounded-full bg-amber-500/30 animate-pulse"></div>' : ''}
+              <div class="w-7 h-7 rounded-full border-2 ${
+                isSos
+                  ? 'bg-red-600 border-white shadow-red-500/50 animate-bounce'
+                  : isFlooded
+                  ? 'bg-amber-600 border-amber-300'
+                  : 'bg-emerald-600 border-white shadow-emerald-500/40'
+              } shadow-lg flex items-center justify-center text-white font-bold text-[11px]">
+                ${member.name.charAt(0)}
+              </div>
+              <div class="absolute -bottom-2 px-1 py-0.2 rounded bg-slate-950/90 text-[8px] font-mono text-emerald-300 border border-emerald-500/40 whitespace-nowrap">
+                ${member.relationship}
+              </div>
+            </div>
+          `,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+
+        const famMarker = L.marker([displayLat, displayLng], { icon: familyIcon });
+
+        famMarker.bindPopup(`
+          <div class="p-2.5 text-slate-900 font-sans text-xs min-w-[210px]">
+            <div class="flex items-center justify-between border-b pb-1">
+              <div>
+                <span class="font-bold text-emerald-800 text-sm">${member.name}</span>
+                <span class="text-[9px] font-mono ml-1 px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 font-semibold">${member.relationship}</span>
+              </div>
+              <span class="font-mono text-[9px] text-slate-500">${member.personId}</span>
+            </div>
+
+            <div class="mt-1.5 space-y-1 text-[10px]">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-500">Location Status:</span>
+                <span class="font-bold font-mono ${isStale ? 'text-amber-700' : 'text-emerald-700'}">
+                  ${isStale ? '⚠️ LAST KNOWN LOCATION' : '🟢 LIVE GPS'}
+                </span>
+              </div>
+
+              ${isFlooded ? `
+                <div class="p-1 rounded bg-amber-50 text-amber-900 font-semibold border border-amber-200">
+                  🌊 In High-Risk Flood Zone (${member.floodDepthM}m water depth)
+                </div>
+              ` : ''}
+
+              ${isSos ? `
+                <div class="p-1 rounded bg-red-50 text-red-700 font-bold border border-red-200 animate-pulse">
+                  🚨 EMERGENCY SOS ACTIVE
+                </div>
+              ` : ''}
+
+              <div class="text-slate-600">
+                <span class="text-slate-400">Area:</span> ${member.locationName || 'Avadi / Ambattur Basin'}
+              </div>
+
+              <div class="text-[9px] font-mono text-slate-400">
+                ${displayLat.toFixed(5)}°, ${displayLng.toFixed(5)}°
+              </div>
+
+              ${member.lastUpdated ? `
+                <div class="text-[9px] text-slate-400">
+                  Last seen: ${member.lastUpdated}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `);
+
+        familyLayerGroupRef.current?.addLayer(famMarker);
+      });
+    });
+  }, [familyMembers, coords]);
+
   // Request browser GPS position
   const requestLiveLocation = () => {
     if (!navigator.geolocation) {
@@ -189,7 +374,7 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
           onUpdateLocation(newLat, newLng, locationName);
         }
 
-        // Sync with SQLite backend endpoint (Strictly for this citizen only)
+        // Sync with SQLite backend endpoint
         if (currentUser?.personId) {
           syncLocationToBackend(currentUser.personId, newLat, newLng, newAcc);
         }
@@ -258,8 +443,14 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
     }
   };
 
+  const handleFocusMember = (lat: number, lng: number) => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo([lat, lng], 17, { duration: 1.2 });
+    }
+  };
+
   return (
-    <div className="w-full h-full flex flex-col bg-slate-950 text-white overflow-hidden">
+    <div className="w-full h-full flex flex-col bg-slate-950 text-white overflow-hidden relative">
       {/* Top Header & Privacy Assurance Bar */}
       <div className="p-3 sm:p-4 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3">
@@ -272,17 +463,60 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
                 My Location Map
               </h2>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/70 text-cyan-300 border border-cyan-500/30">
-                Private Citizen View
+                Live Spatial View
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Personalized single-user GPS verification • Isolated from rescue dispatch
+              Personalized GPS verification • Family location sharing • OpenStreetMap GIS
             </p>
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
+        {/* Action Controls Toolbar */}
+        <div className="flex items-center flex-wrap gap-2">
+          {/* MODULE 2: FAMILY SAFETY BUTTON */}
+          <button
+            onClick={() => setIsFamilyDrawerOpen((prev) => !prev)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow ${
+              isFamilyDrawerOpen
+                ? 'bg-emerald-600 text-white'
+                : 'bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300'
+            }`}
+            title="Open Family Safety & Location Sharing drawer"
+          >
+            <Heart className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Family Safety</span>
+            {familyMembers.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/30 text-emerald-200 text-[10px] font-mono">
+                {familyMembers.length}
+              </span>
+            )}
+            {pendingRequestsCount > 0 && (
+              <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center animate-pulse">
+                {pendingRequestsCount}
+              </span>
+            )}
+          </button>
+
+          {/* MODULE 1: ADMINISTRATOR-ONLY POPULATION RADIUS TOOL */}
+          {isAdmin && (
+            <button
+              onClick={() => setIsPopulationToolOpen((prev) => !prev)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow ${
+                isPopulationToolOpen
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-300'
+              }`}
+              title="Administrator Dynamic Population Mapping Tool"
+            >
+              <Users className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Population Radius Tool</span>
+              <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-indigo-500/30 text-indigo-200">
+                ADMIN
+              </span>
+            </button>
+          )}
+
           {/* Layer Toggle */}
           <button
             onClick={() => setMapStyle((prev) => (prev === 'streets' ? 'topo' : 'streets'))}
@@ -320,7 +554,7 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
         <div className="flex items-center gap-2">
           <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
           <span>
-            Strict Privacy Protected: Only your verified personal coordinates are displayed. Command Center multi-victim records are neither fetched nor exposed.
+            Strict Privacy Protected: Only your verified personal coordinates and authorized family members are rendered on this map.
           </span>
         </div>
         {syncMessage && (
@@ -393,8 +627,10 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
               <div className="font-bold text-white">±{accuracy ? `${accuracy}m` : '8m (Est)'}</div>
             </div>
             <div className="bg-slate-950/70 p-2 rounded-lg border border-slate-800">
-              <div className="text-[10px] text-slate-400">LAST SYNC</div>
-              <div className="font-bold text-amber-300 truncate">{lastUpdated}</div>
+              <div className="text-[10px] text-slate-400">FAMILY SHARING</div>
+              <div className="font-bold text-emerald-300">
+                {familyMembers.length} Connected
+              </div>
             </div>
           </div>
 
@@ -403,6 +639,26 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
             <span className="font-semibold text-white truncate max-w-[190px]">{locationName}</span>
           </div>
         </div>
+
+        {/* OVERLAY 1: Family Safety Drawer */}
+        <FamilySafetyDrawer
+          currentUser={currentUser}
+          isOpen={isFamilyDrawerOpen}
+          onClose={() => setIsFamilyDrawerOpen(false)}
+          onFocusMember={handleFocusMember}
+          onRefreshData={fetchFamilyData}
+          familyMembers={familyMembers}
+          onMembersChange={fetchFamilyData}
+        />
+
+        {/* OVERLAY 2: Administrator-Only Population Radius Tool */}
+        {isAdmin && isPopulationToolOpen && (
+          <PopulationRadiusTool
+            map={mapInstanceRef.current}
+            adminToken={adminToken}
+            onClose={() => setIsPopulationToolOpen(false)}
+          />
+        )}
       </div>
     </div>
   );

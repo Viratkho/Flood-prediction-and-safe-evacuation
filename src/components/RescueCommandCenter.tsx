@@ -33,9 +33,12 @@ import {
   Waves,
   X,
   Zap,
+  Users,
 } from 'lucide-react';
+import { PopulationRadiusTool } from './PopulationRadiusTool';
 
 interface RescueCommandCenterProps {
+  adminToken?: string;
   sharedLocation?: SharedLocationState;
   sensors: RoadSensor[];
   segments: RoadSegment[];
@@ -70,7 +73,10 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
   onNavigateToPersonMonitoring,
   onOpenSmsModal,
   sharedLocation,
+  adminToken,
 }) => {
+  const [isPopulationToolOpen, setIsPopulationToolOpen] = useState<boolean>(false);
+
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const personMarkersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -602,6 +608,18 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
         {/* Quick Map & Layer Controls */}
         <div className="flex items-center gap-2 text-xs">
           <button
+            onClick={() => setIsPopulationToolOpen(prev => !prev)}
+            className={`px-2.5 py-1 rounded border text-xs font-mono flex items-center gap-1.5 transition ${
+              isPopulationToolOpen
+                ? 'bg-indigo-600 text-white border-indigo-400 font-bold'
+                : 'bg-indigo-950/80 hover:bg-indigo-900 border-indigo-500/40 text-indigo-300'
+            }`}
+            title="Dynamic Population Radius Tool"
+          >
+            <Users className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Population Tool</span>
+          </button>
+          <button
             onClick={() => setActiveTileTheme(t => t === 'tactical-dark' ? 'osm-standard' : 'tactical-dark')}
             className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition font-mono flex items-center gap-1"
           >
@@ -648,6 +666,13 @@ export const RescueCommandCenter: React.FC<RescueCommandCenterProps> = ({
       {/* Main Interactive Map Viewport */}
       <div className="relative flex-1 w-full h-full">
         <div ref={mapContainerRef} className="w-full h-full z-0" />
+        {isPopulationToolOpen && (
+          <PopulationRadiusTool
+            map={mapInstanceRef.current}
+            adminToken={adminToken}
+            onClose={() => setIsPopulationToolOpen(false)}
+          />
+        )}
 
         {/* Floating Focused Citizen HUD Banner */}
         {selectedPersonForInspection && (
