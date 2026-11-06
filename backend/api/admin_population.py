@@ -207,6 +207,27 @@ def analyze_population_in_radius(req: PopulationAnalysisRequest, request: Reques
 
     return {
         "success": True,
+        # Normalized top-level properties matching PopulationAnalysisResult
+        "center": {"lat": c_lat, "lng": c_lng},
+        "radiusM": r_meters,
+        "radiusKm": round(r_meters / 1000.0, 2),
+        "areaSqKm": round(area_sq_km, 3),
+        "densityPerSqKm": pop_density,
+        "totalIndividuals": total_people,
+        "breakdown": {
+            "withDeclaredDisabilities": with_disability_cnt,
+            "withoutDeclaredDisabilities": without_disability_cnt,
+            "unknownDisabilityStatus": unknown_disability_cnt,
+            "activeSosCount": active_sos_cnt,
+            "highRiskFloodCount": high_risk_flood_cnt,
+            "staleLocationCount": stale_location_cnt,
+        },
+        "rescuePriority": {
+            "level": priority_badge,
+            "label": priority_level,
+            "description": priority_reason,
+            "color": "#ef4444" if priority_badge == "P0" else ("#f59e0b" if priority_badge == "P1" else "#10b981"),
+        },
         "query": {
             "centerLat": c_lat,
             "centerLng": c_lng,

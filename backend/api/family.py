@@ -32,12 +32,15 @@ def get_request_citizen_id(request: Request) -> str:
 
 
 class ConnectionRequestPayload(BaseModel):
-    targetPersonId: str = Field(..., description="Unique FloodGuard Person ID of family member (e.g. P-102)")
+    targetPersonId: Optional[str] = Field(None, description="Unique FloodGuard Person ID of family member (e.g. P-102)")
+    invitedId: Optional[str] = Field(None, description="Alternative field for target ID")
+    requesterId: Optional[str] = Field(None, description="Sender ID")
     relationship: Optional[str] = Field("Family Member", description="Family relationship label (e.g. Spouse, Parent, Child, Sibling)")
 
 
 class ConnectionResponsePayload(BaseModel):
-    connectionId: int = Field(..., description="ID of the family connection record")
+    connectionId: Optional[int] = Field(None, description="ID of the family connection record")
+    id: Optional[int] = Field(None, description="Alternative field for connectionId")
     action: str = Field(..., description="Action: ACCEPT or REJECT")
     shareLocation: Optional[bool] = Field(True, description="Whether to grant location-sharing permission")
 
@@ -223,11 +226,34 @@ def get_family_connection_requests(request: Request):
             (citizen_id,),
         ).fetchall()
 
+        incoming_list = []
+        for r in incoming_rows:
+            d = dict(r)
+            d["id"] = r["connection_id"]
+            d["connectionId"] = r["connection_id"]
+            d["requesterId"] = r["requester_id"]
+            d["requesterName"] = r["requester_name"]
+            d["requesterPhone"] = r["requester_phone"]
+            d["locationName"] = r["location_name"]
+            d["createdAt"] = r["created_at"]
+            incoming_list.append(d)
+
+        outgoing_list = []
+        for r in outgoing_rows:
+            d = dict(r)
+            d["id"] = r["connection_id"]
+            d["connectionId"] = r["connection_id"]
+            d["invitedId"] = r["invited_id"]
+            d["invitedName"] = r["invited_name"]
+            d["invitedPhone"] = r["invited_phone"]
+            d["createdAt"] = r["created_at"]
+            outgoing_list.append(d)
+
     return {
         "success": True,
         "citizenId": citizen_id,
-        "incoming": [dict(r) for r in incoming_rows],
-        "outgoing": [dict(r) for r in outgoing_rows],
+        "incoming": incoming_list,
+        "outgoing": outgoing_list,
     }
 
 
@@ -237,8 +263,9 @@ def send_family_connection_request(payload: ConnectionRequestPayload, request: R
     Sends an invitation to connect with a family member using their unique FloodGuard Person ID.
     Prevents duplicate requests and self-connection.
     """
-    citizen_id = get_request_citizen_id(request)
-    target_id = payload.targetPersonId.strip().upper()
+    citizen_id = (payload.requesterId or get_request_citizen_id(request)).strip()
+    raw_target = payload.targetPersonId or payload.invitedId or ""
+    target_id = raw_target.strip().upper()
     relationship = payload.relationship.strip() if payload.relationship else "Family Member"
 
     if not target_id:
@@ -333,7 +360,9 @@ def respond_to_connection_request(payload: ConnectionResponsePayload, request: R
     Only the invited user can respond.
     """
     citizen_id = get_request_citizen_id(request)
-    conn_id = payload.connectionId
+    conn_id = payload.connectionId or payload.id
+    if not conn_id:
+        raise HTTPException(status_code=400, detail="Connection ID is required.")
     action = payload.action.upper()
     share_loc = 1 if payload.shareLocation else 0
 

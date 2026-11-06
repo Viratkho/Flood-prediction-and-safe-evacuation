@@ -148,6 +148,14 @@ res_inv = client.post(
 )
 test("TC-ADMIN-POP-008: Minimum Radius Input Guard", res_inv.status_code == 422, f"HTTP {res_inv.status_code}")
 
+# 9b. Test 1,000m (1.0 km) initial radius analysis
+res_1km = client.post(
+    "/api/admin/population/analysis",
+    json={"centerLat": 13.1143, "centerLng": 80.1015, "radiusM": 1000.0},
+    headers=admin_headers
+)
+test("TC-ADMIN-POP-009: Initial Radius Exactly 1,000m (1.0 km) Analysis", res_1km.status_code == 200 and res_1km.json().get("radiusM") == 1000.0, f"Radius: {res_1km.json().get('radiusM')}m, Individuals: {len(res_1km.json().get('individuals', []))}")
+
 
 # --------------------------------------------------------------------------
 # MODULE 2: FAMILY SAFETY AND LOCATION SHARING

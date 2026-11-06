@@ -105,8 +105,9 @@ export const FamilySafetyDrawer: React.FC<FamilySafetyDrawerProps> = ({
           'X-Citizen-Id': currentUser.personId,
         },
         body: JSON.stringify({
-          requesterId: currentUser.personId,
+          targetPersonId: cleanId,
           invitedId: cleanId,
+          requesterId: currentUser.personId,
           relationship: inviteRelationship,
         }),
       });
@@ -525,66 +526,77 @@ export const FamilySafetyDrawer: React.FC<FamilySafetyDrawerProps> = ({
                   No incoming requests.
                 </div>
               ) : (
-                requests.incoming.map((req) => (
+                requests.incoming.map((req) => {
+                const reqId = req.id || (req as any).connection_id || (req as any).connectionId;
+                const reqName = req.requesterName || (req as any).requester_name || req.requesterId || (req as any).requester_id;
+                const reqPersonId = req.requesterId || (req as any).requester_id;
+                const reqTime = req.createdAt || (req as any).created_at || 'Recently';
+                return (
                   <div
-                    key={req.id}
+                    key={reqId}
                     className="p-2.5 rounded-xl bg-slate-950 border border-emerald-500/40 space-y-1.5"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-white text-xs">{req.requesterName}</span>
+                      <span className="font-bold text-white text-xs">{reqName}</span>
                       <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-emerald-300">
                         {req.relationship}
                       </span>
                     </div>
                     <div className="text-[10px] font-mono text-slate-400">
-                      ID: {req.requesterId} • {req.createdAt}
+                      ID: {reqPersonId} • {reqTime}
                     </div>
                     <div className="flex items-center gap-2 pt-1">
                       <button
-                        onClick={() => handleRespondRequest(req.id, 'ACCEPT')}
+                        onClick={() => handleRespondRequest(reqId, 'ACCEPT')}
                         className="flex-1 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1 transition shadow"
                       >
                         <Check className="w-3 h-3" />
                         <span>Accept & Share</span>
                       </button>
                       <button
-                        onClick={() => handleRespondRequest(req.id, 'REJECT')}
+                        onClick={() => handleRespondRequest(reqId, 'REJECT')}
                         className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold transition"
                       >
                         Reject
                       </button>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                );
+              })
+            )}
+          </div>
 
-            {/* Outgoing Requests */}
-            <div className="pt-2 border-t border-slate-800">
-              <div className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                Sent Invitations (Awaiting Acceptance) ({requests.outgoing.length})
+          {/* Outgoing Requests */}
+          <div className="pt-2 border-t border-slate-800">
+            <div className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+              Sent Invitations (Awaiting Acceptance) ({requests.outgoing.length})
+            </div>
+            {requests.outgoing.length === 0 ? (
+              <div className="text-slate-500 text-[11px] p-2.5 rounded-lg bg-slate-950/40 border border-slate-800/80">
+                No outgoing requests pending.
               </div>
-              {requests.outgoing.length === 0 ? (
-                <div className="text-slate-500 text-[11px] p-2.5 rounded-lg bg-slate-950/40 border border-slate-800/80">
-                  No outgoing requests pending.
-                </div>
-              ) : (
-                requests.outgoing.map((req) => (
+            ) : (
+              requests.outgoing.map((req) => {
+                const reqId = req.id || (req as any).connection_id || (req as any).connectionId;
+                const invName = req.invitedName || (req as any).invited_name || req.invitedId || (req as any).invited_id;
+                const invPersonId = req.invitedId || (req as any).invited_id;
+                return (
                   <div
-                    key={req.id}
+                    key={reqId}
                     className="p-2 rounded-lg bg-slate-950/60 border border-slate-800 flex items-center justify-between text-[11px]"
                   >
                     <div>
-                      <div className="font-semibold text-white">{req.invitedName || req.invitedId}</div>
-                      <div className="text-[9px] font-mono text-slate-500">ID: {req.invitedId} ({req.relationship})</div>
+                      <div className="font-semibold text-white">{invName}</div>
+                      <div className="text-[9px] font-mono text-slate-500">ID: {invPersonId} ({req.relationship})</div>
                     </div>
                     <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
                       PENDING
                     </span>
                   </div>
-                ))
-              )}
-            </div>
+                );
+              })
+            )}
+          </div>
           </div>
         )}
 

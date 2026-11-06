@@ -40,18 +40,34 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
   const circleRef = useRef<L.Circle | null>(null);
   const familyLayerGroupRef = useRef<L.LayerGroup | null>(null);
 
-  // Default coordinate: Avadi Basin fallback or citizen's registered coordinates
-  const initialLat = currentUser?.lat ?? 13.1143;
-  const initialLng = currentUser?.lng ?? 80.1015;
+  // Default coordinate: check localStorage offline cache first, then registered profile, then Avadi Basin
+  const getInitialCoords = (): [number, number] => {
+    try {
+      const cached = localStorage.getItem('floodguard_last_known_coords');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length === 2 && !isNaN(parsed[0]) && !isNaN(parsed[1])) {
+          return [parsed[0], parsed[1]];
+        }
+      }
+    } catch (e) {}
+    return [currentUser?.lat ?? 13.1143, currentUser?.lng ?? 80.1015];
+  };
 
-  const [coords, setCoords] = useState<[number, number]>([initialLat, initialLng]);
+  const getInitialTimestamp = (): string => {
+    try {
+      const cachedTime = localStorage.getItem('floodguard_last_known_timestamp');
+      if (cachedTime) return cachedTime;
+    } catch (e) {}
+    return currentUser?.locationTimestamp || 'Recently synchronized';
+  };
+
+  const [coords, setCoords] = useState<[number, number]>(getInitialCoords);
   const [accuracy, setAccuracy] = useState<number | null>(currentUser?.gpsAccuracyM ?? 8);
   const [locationName, setLocationName] = useState<string>(
     currentUser?.locationName || currentUser?.addressLandmark || 'Avadi / Ambattur Hydrological Basin'
   );
-  const [lastUpdated, setLastUpdated] = useState<string>(
-    currentUser?.locationTimestamp || 'Recently synchronized'
-  );
+  const [lastUpdated, setLastUpdated] = useState<string>(getInitialTimestamp);
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [geoStatus, setGeoStatus] = useState<'IDLE' | 'LOCATING' | 'SUCCESS' | 'DENIED' | 'UNAVAILABLE'>('IDLE');
@@ -169,7 +185,33 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
     // Auto-request live browser GPS on initial view if supported
     requestLiveLocation();
 
+    // Allow clicking map to manually reposition marker if GPS is unavailable or user chooses
+    const onMapClick = (e: L.LeafletMouseEvent) => {
+      const newLat = e.latlng.lat;
+      const newLng = e.latlng.lng;
+      const timeStr = new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+      setCoords([newLat, newLng]);
+      setLastUpdated(timeStr);
+      setGeoStatus('SUCCESS');
+      if (markerRef.current) markerRef.current.setLatLng([newLat, newLng]);
+      if (circleRef.current) circleRef.current.setLatLng([newLat, newLng]);
+      localStorage.setItem('floodguard_last_known_coords', JSON.stringify([newLat, newLng]));
+      localStorage.setItem('floodguard_last_known_timestamp', timeStr);
+      if (currentUser?.personId) {
+        syncLocationToBackend(currentUser.personId, newLat, newLng, accuracy || 10);
+      }
+      if (onUpdateLocation) {
+        onUpdateLocation(newLat, newLng, locationName);
+      }
+    };
+    map.on('click', onMapClick);
+
     return () => {
+      map.off('click', onMapClick);
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -378,6 +420,13 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
         if (currentUser?.personId) {
           syncLocationToBackend(currentUser.personId, newLat, newLng, newAcc);
         }
+
+        // Cache in localStorage for offline resilience
+        try {
+          localStorage.setItem('floodguard_last_known_coords', JSON.stringify([newLat, newLng]));
+          localStorage.setItem('floodguard_last_known_accuracy', String(newAcc));
+          localStorage.setItem('floodguard_last_known_timestamp', timestamp);
+        } catch (e) {}
       },
       (err) => {
         setIsLocating(false);
@@ -609,7 +658,7 @@ export const MyLocationMap: React.FC<MyLocationMapProps> = ({
                   : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
               }`}
             >
-              {geoStatus === 'SUCCESS' ? 'GPS LOCKED' : geoStatus === 'DENIED' ? 'PERMISSION DENIED' : 'SAVED PROFILE'}
+              {geoStatus === 'SUCCESS' ? 'GPS LOCKED' : geoStatus === 'DENIED' ? 'PERMISSION DENIED' : 'LAST KNOWN LOCATION'}
             </span>
           </div>
 
